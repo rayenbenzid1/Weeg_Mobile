@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, StatusBar, Image, SafeAreaView,
+  Dimensions, StatusBar, Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, BorderRadius, Typography, Shadow } from '../../constants/theme';
@@ -341,7 +342,6 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.gray100,
     zIndex: 100,
     minHeight: 58,
-    overflow: 'hidden',
   },
   // Logo wrapper takes all remaining space and never pushes buttons
   navLogoWrapper: {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,7 +11,7 @@ import { ControlScreen } from '../screens/control/ControlScreen';
 import { AdminScreen } from '../screens/admin/AdminScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
 
-import { Colors } from '../constants/theme';
+import { Colors, BorderRadius, Spacing } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { alerts } from '../lib/mockData';
 
@@ -62,9 +63,10 @@ function Header({ title, navigation }: { title: string; navigation?: any }) {
   const { user } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
   const pendingAlerts = alerts.filter(a => a.status === 'pending').length;
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={h.header}>
+    <View style={[h.header, { paddingTop: insets.top + 8 }]}>
       <SearchModal visible={searchOpen} onClose={() => setSearchOpen(false)} />
       {/* Left: Logo */}
       <View style={h.left}>
@@ -102,7 +104,7 @@ function Header({ title, navigation }: { title: string; navigation?: any }) {
 }
 
 const h = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.gray100 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.gray100 },
   left: { flexDirection: 'row', alignItems: 'center' },
   logoImg: { width: 100, height: 36 },
   right: { flexDirection: 'row', alignItems: 'center', gap: 4 },
