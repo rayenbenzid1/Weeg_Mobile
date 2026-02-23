@@ -1,3 +1,11 @@
+/**
+ * MainNavigator.tsx — Navigation par rôle
+ *
+ * ADMIN   : Admin · Profile · Settings
+ * MANAGER : Home · Alerts · Control · Team · Profile · Settings
+ * AGENT   : Home · Alerts · Control · Profile · Settings
+ */
+
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -5,26 +13,29 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
-import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
-import { AlertsScreen } from '../screens/alerts/AlertsScreen';
-import { ControlScreen } from '../screens/control/ControlScreen';
-import { AdminScreen } from '../screens/admin/AdminScreen';
-import { ProfileScreen } from '../screens/profile/ProfileScreen';
+import { DashboardScreen }      from '../screens/dashboard/DashboardScreen';
+import { AlertsScreen }         from '../screens/alerts/AlertsScreen';
+import { ControlScreen }        from '../screens/control/ControlScreen';
+import { AdminScreen }          from '../screens/admin/AdminScreen';
+import { ManagerAgentsScreen }  from '../screens/manager/ManagerAgentsScreen';
+import { ProfileScreen }        from '../screens/profile/ProfileScreen';
+import { SettingsScreen }       from '../screens/settings/SettingsScreen';
 
-import { Colors, BorderRadius, Spacing } from '../constants/theme';
+import { Colors, BorderRadius } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { alerts } from '../lib/mockData';
 
 const Tab = createBottomTabNavigator();
-
-// Weeg brand colors
-const WEEG_BLUE = '#1a6fe8';
+const WEEG_NAVY   = '#0d1b2e';
+const WEEG_BLUE   = '#1a6fe8';
 const WEEG_ORANGE = '#e87c1a';
 
-function SearchModal({ visible, onClose }: any) {
+// ─── Search Modal ──────────────────────────────────────────────────────────────
+
+function SearchModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [q, setQ] = useState('');
-  const suggestions = ['MacBook Pro', 'iPhone 15 Pro', 'Samsung Galaxy', 'AirPods Pro', 'Tech Solutions Inc', 'Invoice #247'];
+  const suggestions = ['MacBook Pro', 'iPhone 15 Pro', 'Samsung Galaxy', 'AirPods Pro', 'Invoice #247'];
   const filtered = q ? suggestions.filter(s => s.toLowerCase().includes(q.toLowerCase())) : suggestions;
+
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: Colors.white }}>
@@ -51,7 +62,9 @@ function SearchModal({ visible, onClose }: any) {
             </TouchableOpacity>
           ))}
           {filtered.length === 0 && (
-            <Text style={{ fontSize: 13, color: Colors.gray400, textAlign: 'center', marginTop: 24 }}>No results for "{q}"</Text>
+            <Text style={{ fontSize: 13, color: Colors.gray400, textAlign: 'center', marginTop: 24 }}>
+              No results for "{q}"
+            </Text>
           )}
         </View>
       </View>
@@ -59,166 +72,203 @@ function SearchModal({ visible, onClose }: any) {
   );
 }
 
-function Header({ title, navigation }: { title: string; navigation?: any }) {
+// ─── Header ────────────────────────────────────────────────────────────────────
+
+function Header({ navigation, pendingAlertsCount = 0 }: { navigation?: any; pendingAlertsCount?: number }) {
   const { user } = useAuth();
   const [searchOpen, setSearchOpen] = useState(false);
-  const pendingAlerts = alerts.filter(a => a.status === 'pending').length;
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[h.header, { paddingTop: insets.top + 8 }]}>
       <SearchModal visible={searchOpen} onClose={() => setSearchOpen(false)} />
-      {/* Left: Logo */}
       <View style={h.left}>
-        <Image
-          source={require('../assets/logo.jpeg')}
-          style={h.logoImg}
-          resizeMode="contain"
-        />
+        <Image source={require('../assets/logo.jpeg')} style={h.logoImg} resizeMode="contain" />
       </View>
-      {/* Right: Search + Notifs + User */}
       <View style={h.right}>
         <TouchableOpacity style={h.iconBtn} onPress={() => setSearchOpen(true)}>
           <Ionicons name="search-outline" size={20} color={Colors.gray500} />
         </TouchableOpacity>
         <TouchableOpacity style={h.iconBtn} onPress={() => navigation?.navigate('Alerts')}>
           <Ionicons name="notifications-outline" size={20} color={Colors.gray500} />
-          {pendingAlerts > 0 && (
+          {pendingAlertsCount > 0 && (
             <View style={h.badge}>
-              <Text style={h.badgeTxt}>{pendingAlerts > 9 ? '9+' : pendingAlerts}</Text>
+              <Text style={h.badgeTxt}>{pendingAlertsCount > 9 ? '9+' : pendingAlertsCount}</Text>
             </View>
           )}
         </TouchableOpacity>
-        <View style={h.userRow}>
-          <LinearGradient colors={[WEEG_BLUE, WEEG_ORANGE]} style={h.avatar} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-            <Text style={h.avatarTxt}>{(user?.name || 'J').charAt(0).toUpperCase()}</Text>
+        <TouchableOpacity style={h.userRow} onPress={() => navigation?.navigate('Profile')}>
+          <LinearGradient colors={[WEEG_NAVY, WEEG_BLUE, WEEG_ORANGE]} style={h.avatar} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+            <Text style={h.avatarTxt}>{(user?.name || 'U').charAt(0).toUpperCase()}</Text>
           </LinearGradient>
           <View>
-            <Text style={h.userName} numberOfLines={1}>{user?.name || 'John Manager'}</Text>
-            <Text style={h.userRole}>{user?.role || 'manager'}</Text>
+            <Text style={h.userName} numberOfLines={1}>{user?.name || 'User'}</Text>
+            <Text style={h.userRole}>{user?.role || 'user'}</Text>
           </View>
-        </View>
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 const h = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10, backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.gray100 },
-  left: { flexDirection: 'row', alignItems: 'center' },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingBottom: 10,
+    backgroundColor: Colors.white,
+    borderBottomWidth: 1, borderBottomColor: Colors.gray100,
+  },
+  left:    { flexDirection: 'row', alignItems: 'center' },
   logoImg: { width: 100, height: 36 },
-  right: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  right:   { flexDirection: 'row', alignItems: 'center', gap: 4 },
   iconBtn: { padding: 6, position: 'relative' },
-  badge: { position: 'absolute', top: 2, right: 2, minWidth: 14, height: 14, borderRadius: 7, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
-  badgeTxt: { fontSize: 8, color: '#fff', fontWeight: '800' },
+  badge:   { position: 'absolute', top: 2, right: 2, minWidth: 14, height: 14, borderRadius: 7, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
+  badgeTxt:{ fontSize: 8, color: '#fff', fontWeight: '800' },
   userRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 4 },
-  avatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  avatar:  { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   avatarTxt: { fontSize: 12, fontWeight: '800', color: '#fff' },
-  userName: { fontSize: 11, fontWeight: '700', color: Colors.foreground, maxWidth: 70 },
-  userRole: { fontSize: 9, color: Colors.gray500, textTransform: 'capitalize' },
+  userName:  { fontSize: 11, fontWeight: '700', color: Colors.foreground, maxWidth: 70 },
+  userRole:  { fontSize: 9, color: Colors.gray500, textTransform: 'capitalize' },
   searchModalBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, paddingTop: 20, borderBottomWidth: 1, borderBottomColor: Colors.gray100 },
-  searchItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.gray50 },
+  searchItem:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.gray50 },
 });
 
-// Screens wrapped with Header
-function withHeader(Screen: React.ComponentType<any>, title: string) {
+// ─── Hook alertes ──────────────────────────────────────────────────────────────
+
+function usePendingAlerts() {
+  const [count] = React.useState(0);
+  // TODO: fetch('/alerts/pending-count/') quand endpoint prêt
+  return { pendingAlertsCount: count };
+}
+
+// ─── Wrapper avec Header ───────────────────────────────────────────────────────
+
+function withHeader(Screen: React.ComponentType<any>) {
   return function WrappedScreen(props: any) {
+    const { pendingAlertsCount } = usePendingAlerts();
     return (
       <View style={{ flex: 1 }}>
-        <Header title={title} navigation={props.navigation} />
+        <Header navigation={props.navigation} pendingAlertsCount={pendingAlertsCount} />
         <Screen {...props} />
       </View>
     );
   };
 }
 
-const HomeSreen = withHeader(DashboardScreen, 'Dashboard');
-const AlertsWrapped = withHeader(AlertsScreen, 'Alerts');
-const ControlWrapped = withHeader(ControlScreen, 'Control');
-const AdminWrapped = withHeader(AdminScreen, 'Admin');
-const ProfileWrapped = withHeader(ProfileScreen, 'Profile');
+// Wrappers
+const HomeWrapped          = withHeader(DashboardScreen);
+const AlertsWrapped        = withHeader(AlertsScreen);
+const ControlWrapped       = withHeader(ControlScreen);
+const AdminWrapped         = withHeader(AdminScreen);
+const ManagerAgentsWrapped = withHeader(ManagerAgentsScreen);
+const ProfileWrapped       = withHeader(ProfileScreen);
+const SettingsWrapped      = withHeader(SettingsScreen);
+
+// ─── Tab styles communs ────────────────────────────────────────────────────────
+
+const tabBarStyle = {
+  backgroundColor: Colors.white,
+  borderTopColor: Colors.gray100,
+  borderTopWidth: 1,
+  paddingTop: 6,
+  paddingBottom: 8,
+  height: 65,
+  elevation: 8,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: -2 },
+  shadowOpacity: 0.06,
+  shadowRadius: 8,
+};
+
+const navigatorScreenOptions = {
+  headerShown: false,
+  tabBarStyle,
+  tabBarActiveTintColor: WEEG_BLUE,
+  tabBarInactiveTintColor: Colors.gray400,
+  tabBarLabelStyle: { fontSize: 10, fontWeight: '600' as const, marginTop: 2 },
+};
+
+// ─── Tab options ───────────────────────────────────────────────────────────────
+
+const tabOptions = {
+  Home: {
+    tabBarLabel: 'Home',
+    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />,
+  },
+  Alerts: (badge: number) => ({
+    tabBarLabel: 'Alerts',
+    tabBarBadge: badge > 0 ? badge : undefined,
+    tabBarBadgeStyle: { backgroundColor: '#dc2626', fontSize: 9, minWidth: 16, height: 16 },
+    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'warning' : 'warning-outline'} size={22} color={color} />,
+  }),
+  Control: {
+    tabBarLabel: 'Control',
+    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'pulse' : 'pulse-outline'} size={22} color={color} />,
+  },
+  Admin: {
+    tabBarLabel: 'Admin',
+    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'shield-checkmark' : 'shield-checkmark-outline'} size={22} color={color} />,
+  },
+  // ← Nouveau tab Team pour les managers
+  Team: {
+    tabBarLabel: 'Team',
+    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'people' : 'people-outline'} size={22} color={color} />,
+  },
+  Profile: {
+    tabBarLabel: 'Profile',
+    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />,
+  },
+  Settings: {
+    tabBarLabel: 'Settings',
+    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'settings' : 'settings-outline'} size={22} color={color} />,
+  },
+};
+
+// ─── Navigators par rôle ───────────────────────────────────────────────────────
+
+function AdminNavigator() {
+  return (
+    <Tab.Navigator screenOptions={navigatorScreenOptions}>
+      <Tab.Screen name="Admin"    component={AdminWrapped}    options={tabOptions.Admin} />
+      <Tab.Screen name="Profile"  component={ProfileWrapped}  options={tabOptions.Profile} />
+      <Tab.Screen name="Settings" component={SettingsWrapped} options={tabOptions.Settings} />
+    </Tab.Navigator>
+  );
+}
+
+function ManagerNavigator() {
+  const { pendingAlertsCount } = usePendingAlerts();
+  return (
+    <Tab.Navigator screenOptions={navigatorScreenOptions}>
+      <Tab.Screen name="Home"     component={HomeWrapped}          options={tabOptions.Home} />
+      <Tab.Screen name="Alerts"   component={AlertsWrapped}        options={tabOptions.Alerts(pendingAlertsCount)} />
+      <Tab.Screen name="Control"  component={ControlWrapped}       options={tabOptions.Control} />
+      {/* ← Nouveau tab Team : gestion des agents du manager */}
+      <Tab.Screen name="Team"     component={ManagerAgentsWrapped} options={tabOptions.Team} />
+      <Tab.Screen name="Profile"  component={ProfileWrapped}       options={tabOptions.Profile} />
+      <Tab.Screen name="Settings" component={SettingsWrapped}      options={tabOptions.Settings} />
+    </Tab.Navigator>
+  );
+}
+
+function AgentNavigator() {
+  const { pendingAlertsCount } = usePendingAlerts();
+  return (
+    <Tab.Navigator screenOptions={navigatorScreenOptions}>
+      <Tab.Screen name="Home"     component={HomeWrapped}     options={tabOptions.Home} />
+      <Tab.Screen name="Alerts"   component={AlertsWrapped}   options={tabOptions.Alerts(pendingAlertsCount)} />
+      <Tab.Screen name="Control"  component={ControlWrapped}  options={tabOptions.Control} />
+      <Tab.Screen name="Profile"  component={ProfileWrapped}  options={tabOptions.Profile} />
+      <Tab.Screen name="Settings" component={SettingsWrapped} options={tabOptions.Settings} />
+    </Tab.Navigator>
+  );
+}
+
+// ─── Export principal ──────────────────────────────────────────────────────────
 
 export function MainNavigator() {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
-  const pendingAlerts = alerts.filter(a => a.status === 'pending').length;
-
-  return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: Colors.white,
-          borderTopColor: Colors.gray100,
-          borderTopWidth: 1,
-          paddingTop: 6,
-          paddingBottom: 8,
-          height: 65,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.06,
-          shadowRadius: 8,
-        },
-        tabBarActiveTintColor: WEEG_BLUE,
-        tabBarInactiveTintColor: Colors.gray400,
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 2 },
-      }}
-    >
-      <Tab.Screen
-        name="Home"
-        component={HomeSreen}
-        options={{
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Alerts"
-        component={AlertsWrapped}
-        options={{
-          tabBarLabel: 'Alerts',
-          tabBarBadge: pendingAlerts > 0 ? pendingAlerts : undefined,
-          tabBarBadgeStyle: { backgroundColor: '#dc2626', fontSize: 9, minWidth: 16, height: 16 },
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons name={focused ? 'warning' : 'warning-outline'} size={22} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Control"
-        component={ControlWrapped}
-        options={{
-          tabBarLabel: 'Control',
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons name={focused ? 'pulse' : 'pulse-outline'} size={22} color={color} />
-          ),
-        }}
-      />
-      {isAdmin && (
-        <Tab.Screen
-          name="Admin"
-          component={AdminWrapped}
-          options={{
-            tabBarLabel: 'Admin',
-            tabBarIcon: ({ focused, color }) => (
-              <Ionicons name={focused ? 'shield-checkmark' : 'shield-checkmark-outline'} size={22} color={color} />
-            ),
-          }}
-        />
-      )}
-      <Tab.Screen
-        name="Profile"
-        component={ProfileWrapped}
-        options={{
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({ focused, color }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
-          ),
-        }}
-      />
-    </Tab.Navigator>
-  );
+  if (user?.role === 'admin')   return <AdminNavigator />;
+  if (user?.role === 'manager') return <ManagerNavigator />;
+  return <AgentNavigator />;
 }
