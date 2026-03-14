@@ -32,7 +32,7 @@ const fmt = (n: number | null | undefined): string => {
 };
 
 const fmtCurrency = (n: number | null | undefined) =>
-  n == null || isNaN(Number(n)) ? '—' : `${fmt(n)} DL`;
+  n == null || isNaN(Number(n)) ? '—' : `${fmt(n)} DLY`;
 
 const fmtDate = (s: string) => {
   try {
