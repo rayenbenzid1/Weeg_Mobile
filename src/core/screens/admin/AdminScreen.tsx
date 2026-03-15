@@ -1,14 +1,7 @@
 /**
- * AdminScreen.tsx — Panel Admin WEEG — v3
- *
- * Droits admin :
- *   • Approuver / Rejeter les demandes manager  (onglet Pending)
- *   • Voir la liste des agents                  (onglet Agents) — lecture seule
- *   • Suspendre / Réactiver les managers        (Managers / Suspended / All)
- *
- * Les permissions agents sont gérées par les managers, pas par l'admin.
+ * AdminScreen.tsx — WEEG Admin v3 Premium
+ * Deep navy + indigo accent, refined cards with clear action hierarchy
  */
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
@@ -19,469 +12,291 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { AdminService } from '../../lib/api';
 
-// ─── Palette ──────────────────────────────────────────────────────────────────
-const P = {
-  indigo:      '#4338ca',
-  indigoLight: '#e0e7ff',
-  indigoDark:  '#312e81',
-  violet:      '#7c3aed',
-  sky:         '#0284c7',
-  green:       '#059669',
-  greenLight:  '#d1fae5',
-  amber:       '#d97706',
-  amberLight:  '#fef3c7',
-  red:         '#dc2626',
-  redLight:    '#fee2e2',
-  slate50:     '#f8fafc',
-  slate100:    '#f1f5f9',
-  slate200:    '#e2e8f0',
-  slate300:    '#cbd5e1',
-  slate400:    '#94a3b8',
-  slate500:    '#64748b',
-  slate600:    '#475569',
-  slate700:    '#334155',
-  slate900:    '#0f172a',
-  white:       '#ffffff',
+// ─── Tokens ───────────────────────────────────────────────────────────────────
+const T = {
+  navy:    '#0a1628',
+  navy2:   '#111f3a',
+  indigo:  '#4f46e5',
+  indigo2: '#3730a3',
+  sky:     '#0284c7',
+  skyBg:   '#e0f2fe',
+  green:   '#059669',
+  greenBg: '#d1fae5',
+  amber:   '#d97706',
+  amberBg: '#fef3c7',
+  red:     '#dc2626',
+  redBg:   '#fee2e2',
+  violet:  '#7c3aed',
+  violetBg:'#ede9fe',
+  white:   '#ffffff',
+  surface: '#ffffff',
+  surface2:'#f8fafc',
+  border:  '#e2e8f0',
+  border2: '#f1f5f9',
+  text:    '#0f172a',
+  text2:   '#334155',
+  text3:   '#64748b',
+  text4:   '#94a3b8',
+  bg:      '#f1f5f9',
 };
 
 type AdminTab = 'pending' | 'managers' | 'agents' | 'suspended' | 'all';
 
-// ─── Composants visuels ───────────────────────────────────────────────────────
-
-function StatusPill({ status }: { status: string }) {
-  const map: Record<string, { bg: string; color: string; dot: string; label: string }> = {
-    approved:  { bg: P.greenLight, color: P.green, dot: P.green, label: 'Approved'  },
-    active:    { bg: P.greenLight, color: P.green, dot: P.green, label: 'Active'    },
-    pending:   { bg: P.amberLight, color: P.amber, dot: P.amber, label: 'Pending'   },
-    rejected:  { bg: P.redLight,   color: P.red,   dot: P.red,   label: 'Rejected'  },
-    suspended: { bg: P.redLight,   color: P.red,   dot: P.red,   label: 'Suspended' },
-  };
-  const c = map[status] || { bg: P.slate100, color: P.slate500, dot: P.slate400, label: status };
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5,
-      backgroundColor: c.bg, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 99 }}>
-      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.dot }} />
-      <Text style={{ fontSize: 11, fontWeight: '700', color: c.color, letterSpacing: 0.3 }}>
-        {c.label}
-      </Text>
-    </View>
-  );
-}
-
-function RolePill({ role }: { role: string }) {
-  const color = role === 'manager' ? P.sky : P.violet;
-  const icon  = role === 'manager' ? 'briefcase-outline' : 'person-outline';
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4,
-      backgroundColor: color + '18', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 99 }}>
-      <Ionicons name={icon as any} size={10} color={color} />
-      <Text style={{ fontSize: 11, fontWeight: '700', color, textTransform: 'capitalize' }}>
-        {role}
-      </Text>
-    </View>
-  );
-}
-
+// ─── Avatar ───────────────────────────────────────────────────────────────────
 function Avatar({ name, color }: { name: string; color: string }) {
   const initials = name.split(' ').map(w => w[0] || '').join('').slice(0, 2).toUpperCase() || '?';
   return (
-    <LinearGradient colors={[color, color + 'cc']} style={S.avatar}
-      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-      <Text style={S.avatarTxt}>{initials}</Text>
+    <LinearGradient colors={[color, color + 'aa']} style={{ width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+      <Text style={{ fontSize: 15, fontWeight: '900', color: T.white, letterSpacing: 0.5 }}>{initials}</Text>
     </LinearGradient>
   );
 }
 
-function Tag({ icon, label }: { icon: string; label: string }) {
+// ─── Status Pill ──────────────────────────────────────────────────────────────
+function StatusPill({ status }: { status: string }) {
+  const m: Record<string, { bg: string; color: string }> = {
+    approved:  { bg: T.greenBg,  color: T.green  },
+    active:    { bg: T.greenBg,  color: T.green  },
+    pending:   { bg: T.amberBg,  color: T.amber  },
+    rejected:  { bg: T.redBg,    color: T.red    },
+    suspended: { bg: T.redBg,    color: T.red    },
+  };
+  const s = m[status] || { bg: T.border2, color: T.text3 };
   return (
-    <View style={S.tag}>
-      <Ionicons name={icon as any} size={10} color={P.slate500} />
-      <Text style={S.tagTxt} numberOfLines={1}>{label}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: s.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
+      <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: s.color }} />
+      <Text style={{ fontSize: 10, fontWeight: '700', color: s.color, textTransform: 'capitalize' }}>{status}</Text>
     </View>
   );
 }
 
-type ActionVariant = 'approve' | 'reject' | 'suspend' | 'reactivate';
-
-function ActionBtn({ label, icon, variant, onPress }:
-  { label: string; icon: string; variant: ActionVariant; onPress: () => void }) {
-  const cfg: Record<ActionVariant, { bg: string; border: string; text: string }> = {
-    approve:    { bg: P.green,      border: P.green,    text: P.white  },
-    reject:     { bg: P.redLight,   border: '#fecaca',  text: P.red    },
-    suspend:    { bg: '#fff1f2',    border: '#fecaca',  text: P.red    },
-    reactivate: { bg: P.greenLight, border: '#6ee7b7',  text: P.green  },
+// ─── Role Pill ────────────────────────────────────────────────────────────────
+function RolePill({ role }: { role: string }) {
+  const m: Record<string, { bg: string; color: string }> = {
+    manager: { bg: T.skyBg,    color: T.sky    },
+    admin:   { bg: '#e0e7ff',  color: T.indigo },
+    agent:   { bg: T.violetBg, color: T.violet },
   };
-  const st = cfg[variant];
+  const s = m[role] || { bg: T.border2, color: T.text3 };
   return (
-    <TouchableOpacity onPress={onPress}
-      style={[S.actionBtn, { backgroundColor: st.bg, borderColor: st.border }]}>
-      <Ionicons name={icon as any} size={12} color={st.text} />
-      <Text style={{ fontSize: 11, fontWeight: '700', color: st.text }}>{label}</Text>
+    <View style={{ backgroundColor: s.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 }}>
+      <Text style={{ fontSize: 10, fontWeight: '700', color: s.color, textTransform: 'capitalize' }}>{role}</Text>
+    </View>
+  );
+}
+
+// ─── Action Button ────────────────────────────────────────────────────────────
+function ActionBtn({ label, icon, bg, border, color, onPress }: { label: string; icon: string; bg: string; border: string; color: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity onPress={onPress} activeOpacity={0.75}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: border, backgroundColor: bg }}>
+      <Ionicons name={icon as any} size={13} color={color} />
+      <Text style={{ fontSize: 12, fontWeight: '700', color }}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
-// ─── Modal rejet ──────────────────────────────────────────────────────────────
-
-function RejectModal({ manager, onClose, onReject }:
-  { manager: any; onClose: () => void; onReject: (r: string) => void }) {
+// ─── Reject Modal ─────────────────────────────────────────────────────────────
+function RejectModal({ manager, onClose, onReject }: { manager: any; onClose: () => void; onReject: (r: string) => void }) {
   const [reason, setReason] = useState('');
-  const quickReasons = [
-    'Incomplete information',
-    'Unverified company',
-    'Duplicate account',
-    'Invalid email domain',
-  ];
-
+  const quick = ['Incomplete information', 'Unverified company', 'Duplicate account', 'Invalid email domain'];
   return (
     <Modal visible animationType="slide" presentationStyle="formSheet" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: P.white, padding: 24, paddingTop: 32 }}>
-
-        {/* Header */}
+      <View style={{ flex: 1, backgroundColor: T.white, padding: 24, paddingTop: 32 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: P.redLight,
-            alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="close-circle-outline" size={24} color={P.red} />
+          <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: T.redBg, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="close-circle-outline" size={24} color={T.red} />
           </View>
           <View>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: P.slate900 }}>Reject Request</Text>
-            <Text style={{ fontSize: 12, color: P.slate400 }}>
-              {manager?.first_name} {manager?.last_name}
-            </Text>
+            <Text style={{ fontSize: 17, fontWeight: '800', color: T.text }}>Reject Request</Text>
+            <Text style={{ fontSize: 12, color: T.text4 }}>{manager?.first_name} {manager?.last_name}</Text>
           </View>
         </View>
 
-        {/* Quick reasons */}
-        <Text style={{ fontSize: 13, fontWeight: '600', color: P.slate600, marginBottom: 10 }}>
-          Quick reasons
-        </Text>
+        <Text style={{ fontSize: 12, fontWeight: '700', color: T.text3, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 }}>Quick Reasons</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-          {quickReasons.map(r => (
+          {quick.map(r => (
             <TouchableOpacity key={r} onPress={() => setReason(r)}
-              style={[S.quickReason, reason === r && S.quickReasonActive]}>
-              <Text style={{ fontSize: 12, fontWeight: '600',
-                color: reason === r ? P.indigo : P.slate500 }}>{r}</Text>
+              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9, borderWidth: 1.5, borderColor: reason === r ? T.indigo : T.border, backgroundColor: reason === r ? '#e0e7ff' : T.surface2 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: reason === r ? T.indigo : T.text3 }}>{r}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Custom */}
-        <Text style={{ fontSize: 13, fontWeight: '600', color: P.slate600, marginBottom: 8 }}>
-          Or write a custom reason
-        </Text>
+        <Text style={{ fontSize: 12, fontWeight: '700', color: T.text3, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 }}>Custom Reason</Text>
         <TextInput
-          value={reason}
-          onChangeText={setReason}
-          multiline
-          numberOfLines={4}
-          placeholder="Describe why this request is being rejected..."
-          placeholderTextColor={P.slate400}
-          style={S.rejectInput}
+          value={reason} onChangeText={setReason} multiline numberOfLines={4}
+          placeholder="Describe why this request is being rejected…" placeholderTextColor={T.text4}
+          style={{ borderWidth: 1.5, borderColor: T.border, borderRadius: 12, padding: 14, fontSize: 14, color: T.text2, backgroundColor: T.surface2, minHeight: 110, textAlignVertical: 'top' }}
         />
 
-        {/* Buttons */}
         <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
-          <TouchableOpacity style={[S.cancelBtn, { flex: 1 }]} onPress={onClose}>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: P.slate600 }}>Cancel</Text>
+          <TouchableOpacity style={{ flex: 1, paddingVertical: 13, borderRadius: 12, backgroundColor: T.surface2, alignItems: 'center', borderWidth: 1, borderColor: T.border }} onPress={onClose}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: T.text3 }}>Cancel</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            disabled={!reason.trim()}
-            onPress={() => { onReject(reason); onClose(); }}
-            style={{ flex: 2, opacity: reason.trim() ? 1 : 0.4, borderRadius: 12, overflow: 'hidden' }}
-          >
-            <View style={{ backgroundColor: P.red, paddingVertical: 14,
-              alignItems: 'center', borderRadius: 12 }}>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#fff' }}>Reject Request</Text>
+          <TouchableOpacity disabled={!reason.trim()} onPress={() => { onReject(reason); onClose(); }}
+            style={{ flex: 2, opacity: reason.trim() ? 1 : 0.4, borderRadius: 12, overflow: 'hidden' }}>
+            <View style={{ backgroundColor: T.red, paddingVertical: 14, alignItems: 'center', borderRadius: 12 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: T.white }}>Reject Request</Text>
             </View>
           </TouchableOpacity>
         </View>
-
       </View>
     </Modal>
   );
 }
 
-// ─── Screen principal ─────────────────────────────────────────────────────────
+// ─── User Card ────────────────────────────────────────────────────────────────
+function UserCard({ u, tab, onApprove, onRejectStart, onSuspend, onReactivate }: {
+  u: any; tab: AdminTab;
+  onApprove: () => void; onRejectStart: () => void;
+  onSuspend: () => void; onReactivate: () => void;
+}) {
+  const name       = u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || '—';
+  const avatarColor = u.role === 'manager' ? T.sky : u.role === 'agent' ? T.violet : T.indigo;
+  const isPending  = tab === 'pending';
+  const isSuspended = tab === 'suspended' || (tab === 'all' && u.status === 'suspended');
+  const canSuspend = u.role === 'manager' && u.status !== 'suspended' && u.status !== 'pending' && (tab === 'managers' || tab === 'all');
+  const co         = u.company || {};
+  const companyName = co.name || u.company_name || null;
+  const industry   = co.industry || u.industry || null;
+  const country    = co.country || u.country || null;
+  const city       = co.city || u.city || null;
+  const showCompany = (isPending || u.role === 'manager') && (companyName || industry || country);
 
+  return (
+    <View style={S.card}>
+      {/* Top: avatar + info + date */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+        <Avatar name={name} color={avatarColor} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={{ fontSize: 14, fontWeight: '800', color: T.text, letterSpacing: -0.2 }} numberOfLines={1}>{name}</Text>
+          <Text style={{ fontSize: 11.5, color: T.text3, marginTop: 2 }} numberOfLines={1}>{u.email}</Text>
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
+            <RolePill role={u.role || 'user'} />
+            <StatusPill status={u.status || 'active'} />
+          </View>
+        </View>
+        {u.created_at && (
+          <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+            <Text style={{ fontSize: 9.5, color: T.text4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Joined</Text>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: T.text3, marginTop: 1 }}>
+              {new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Company info */}
+      {showCompany && (
+        <View style={{ marginTop: 12, backgroundColor: T.surface2, borderRadius: 10, padding: 12, borderWidth: 1, borderColor: T.border2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
+            <Ionicons name="business-outline" size={12} color={T.indigo} />
+            <Text style={{ fontSize: 10, fontWeight: '700', color: T.indigo, textTransform: 'uppercase', letterSpacing: 0.8 }}>Company Info</Text>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            {([['Company', companyName], ['Industry', industry], ['Country', country], ['City', city]] as [string, string | null][]).map(([lbl, val]) => val ? (
+              <View key={lbl} style={{ width: '50%', paddingVertical: 4, paddingRight: 8 }}>
+                <Text style={{ fontSize: 9.5, fontWeight: '700', color: T.text4, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 1 }}>{lbl}</Text>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: T.text2 }} numberOfLines={1}>{val}</Text>
+              </View>
+            ) : null)}
+          </View>
+        </View>
+      )}
+
+      {/* Actions */}
+      {(isPending || isSuspended || canSuspend) && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: T.border2 }}>
+          {isPending && (
+            <>
+              <ActionBtn label="Approve" icon="checkmark-circle-outline" bg={T.green}   border={T.green}  color={T.white} onPress={onApprove}     />
+              <ActionBtn label="Reject"  icon="close-circle-outline"     bg={T.redBg}   border="#fecaca"  color={T.red}   onPress={onRejectStart} />
+            </>
+          )}
+          {canSuspend  && <ActionBtn label="Suspend"    icon="ban-outline"             bg="#fff1f2"    border="#fecaca"  color={T.red}   onPress={onSuspend}    />}
+          {isSuspended && u.role === 'manager' && <ActionBtn label="Reactivate" icon="refresh-circle-outline" bg={T.greenBg} border="#6ee7b7" color={T.green} onPress={onReactivate} />}
+        </View>
+      )}
+
+      {!isPending && !isSuspended && !canSuspend && u.role === 'agent' && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: T.border2 }}>
+          <Ionicons name="information-circle-outline" size={12} color={T.text4} />
+          <Text style={{ fontSize: 10.5, color: T.text4, fontStyle: 'italic' }}>Permissions managed by their manager</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export function AdminScreen() {
   const { approveManager, rejectManager } = useAuth();
-  const [tab, setTab]       = useState<AdminTab>('pending');
-  const [users, setUsers]   = useState<any[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [rejectingManager, setRejectingManager] = useState<any>(null);
+  const [tab,          setTab]          = useState<AdminTab>('pending');
+  const [users,        setUsers]        = useState<any[]>([]);
+  const [loading,      setLoading]      = useState(false);
+  const [refreshing,   setRefreshing]   = useState(false);
+  const [rejectTarget, setRejectTarget] = useState<any>(null);
+  const [pendingCount, setPendingCount] = useState(0);
 
-  const filterMap: Record<AdminTab, { status?: string; role?: string }> = {
-    pending:   { status: 'pending' },
-    managers:  { role: 'manager' },   // all managers — on filtre côté client
-    agents:    { role: 'agent' },
-    suspended: { status: 'suspended' },
-    all:       {},
-  };
-
-  const loadUsers = useCallback(async (currentTab: AdminTab) => {
+  const loadUsers = useCallback(async (t: AdminTab) => {
     setLoading(true);
-    if (currentTab === 'pending') {
+    if (t === 'pending') {
       const res = await AdminService.getPendingManagers();
-      setUsers(res.ok ? (res.data || []) : []);
+      const list = res.ok ? (res.data || []) : [];
+      setUsers(list);
+      setPendingCount(list.length);
     } else {
-      const res = await AdminService.getAllUsers(filterMap[currentTab]);
-      let allUsers: any[] = res.ok ? (res.data?.users || []) : [];
-
-      // Onglet Managers : exclure pending et suspended (afficher approved + active)
-      if (currentTab === 'managers') {
-        allUsers = allUsers.filter(
-          u => u.status !== 'pending' && u.status !== 'suspended' && u.status !== 'rejected'
-        );
-      }
-
-      setUsers(allUsers);
+      const filterMap: Record<string, any> = {
+        managers: { role: 'manager' }, agents: { role: 'agent' },
+        suspended: { status: 'suspended' }, all: {},
+      };
+      const res = await AdminService.getAllUsers(filterMap[t] || {});
+      let all: any[] = res.ok ? (res.data?.users || []) : [];
+      if (t === 'managers') all = all.filter(u => u.status !== 'pending' && u.status !== 'suspended' && u.status !== 'rejected');
+      setUsers(all);
     }
     setLoading(false);
   }, []);
 
   useEffect(() => { loadUsers(tab); }, [tab]);
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await loadUsers(tab);
-    setRefreshing(false);
+  const onRefresh = async () => { setRefreshing(true); await loadUsers(tab); setRefreshing(false); };
+
+  const handleApprove = (u: any) => Alert.alert('Approve Manager', `Approve ${u.first_name} ${u.last_name}?`, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Approve', onPress: async () => {
+      const r = await approveManager(u.id);
+      if (r.success) { Alert.alert('Approved', r.message); setUsers(p => p.filter(m => m.id !== u.id)); }
+      else Alert.alert('Error', r.message);
+    }},
+  ]);
+
+  const handleReject = async (id: string, reason: string) => {
+    const r = await rejectManager(id, reason);
+    if (r.success) { Alert.alert('Rejected', r.message); setUsers(p => p.filter(m => m.id !== id)); }
+    else Alert.alert('Error', r.message);
   };
 
-  // ── Actions ───────────────────────────────────────────────────────────────
+  const handleSuspend = (u: any) => Alert.alert('Suspend', `Suspend ${u.first_name} ${u.last_name}?`, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Suspend', style: 'destructive', onPress: async () => {
+      const res = await AdminService.updateUserStatus(u.id, 'suspended');
+      if (res.ok) { setUsers(p => p.filter(m => m.id !== u.id)); Alert.alert('Suspended', res.data?.message || 'Done.'); }
+      else Alert.alert('Error', res.error || 'Failed');
+    }},
+  ]);
 
-  const handleApprove = (manager: any) => {
-    Alert.alert('Approve Manager', `Approve ${manager.first_name} ${manager.last_name}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Approve',
-        onPress: async () => {
-          const r = await approveManager(manager.id);
-          if (r.success) {
-            Alert.alert('✓ Approved', r.message);
-            setUsers(prev => prev.filter(m => m.id !== manager.id));
-          } else {
-            Alert.alert('Error', r.message);
-          }
-        },
-      },
-    ]);
-  };
+  const handleReactivate = (u: any) => Alert.alert('Reactivate', `Reactivate ${u.first_name} ${u.last_name}?`, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Reactivate', onPress: async () => {
+      const res = await AdminService.updateUserStatus(u.id, 'active');
+      if (res.ok) { setUsers(p => p.filter(m => m.id !== u.id)); Alert.alert('Reactivated', res.data?.message || 'Done.'); }
+      else Alert.alert('Error', res.error || 'Failed');
+    }},
+  ]);
 
-  const handleReject = async (managerId: string, reason: string) => {
-    const r = await rejectManager(managerId, reason);
-    if (r.success) {
-      Alert.alert('Rejected', r.message);
-      setUsers(prev => prev.filter(m => m.id !== managerId));
-    } else {
-      Alert.alert('Error', r.message);
-    }
-  };
-
-  const handleSuspend = (u: any) => {
-    Alert.alert(
-      'Suspend Manager',
-      `Suspend ${u.first_name} ${u.last_name}?\nThey will lose access to the platform.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Suspend', style: 'destructive',
-          onPress: async () => {
-            const res = await AdminService.updateUserStatus(u.id, 'suspended');
-            if (res.ok) {
-              // Remove immediately from managers list, they move to suspended
-              setUsers(prev => prev.filter(m => m.id !== u.id));
-              Alert.alert('✓ Suspended', res.data?.message || `${u.first_name} has been suspended.`);
-            } else Alert.alert('Error', res.error || 'Failed');
-          },
-        },
-      ],
-    );
-  };
-
-  const handleReactivate = (u: any) => {
-    Alert.alert(
-      'Reactivate Manager',
-      `Reactivate ${u.first_name} ${u.last_name}?\nThey will regain access to the platform.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reactivate',
-          onPress: async () => {
-            const res = await AdminService.updateUserStatus(u.id, 'active');
-            if (res.ok) {
-              // Remove immediately from suspended list, they move back to managers
-              setUsers(prev => prev.filter(m => m.id !== u.id));
-              Alert.alert('✓ Reactivated', res.data?.message || `${u.first_name} has been reactivated.`);
-            } else Alert.alert('Error', res.error || 'Failed');
-          },
-        },
-      ],
-    );
-  };
-
-  // ── Rendu d'une carte ─────────────────────────────────────────────────────
-
-  const renderUser = (u: any) => {
-    const name = u.full_name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || '—';
-    const avatarColor = u.role === 'manager' ? P.sky : u.role === 'agent' ? P.violet : P.slate400;
-    const isManager = u.role === 'manager';
-
-    // Quelles actions l'admin peut faire ?
-    const isPending   = tab === 'pending';
-    const isSuspended = tab === 'suspended' || (tab === 'all' && u.status === 'suspended');
-    const canSuspend  = isManager
-      && u.status !== 'suspended'
-      && u.status !== 'pending'
-      && (tab === 'managers' || tab === 'all');
-
-    const hasActions = isPending || isSuspended || canSuspend;
-
-    // Infos société — le serializer retourne un objet "company" imbriqué
-    // (ForeignKey Company sur le modèle Django)
-    // On supporte aussi les champs à plat pour la rétro-compatibilité
-    const co          = u.company || {};
-    const companyName = co.name       || u.company_name || null;
-    const industry    = co.industry   || u.industry     || null;
-    const country     = co.country    || u.country      || null;
-    const city        = co.city       || u.city         || null;
-    const currentErp  = co.current_erp || u.current_erp || null;
-    const phone       = u.phone_number || u.phone       || null;
-
-    // Section société toujours visible pour les managers
-    const showCompany = isManager || isPending;
-
-    return (
-      <View key={u.id} style={S.card}>
-
-        {/* ── Ligne principale ──────────────────────────────────────────── */}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-          <Avatar name={name} color={avatarColor} />
-
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={S.userName} numberOfLines={1}>{name}</Text>
-            <Text style={S.userEmail} numberOfLines={1}>{u.email}</Text>
-            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-              <RolePill role={u.role || 'user'} />
-              <StatusPill status={u.status || 'active'} />
-            </View>
-          </View>
-
-          {/* Date */}
-          {u.created_at && (
-            <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-              <Text style={{ fontSize: 10, color: P.slate400 }}>Joined</Text>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: P.slate500 }}>
-                {new Date(u.created_at).toLocaleDateString('en-GB', {
-                  day: '2-digit', month: 'short', year: 'numeric',
-                })}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* ── Infos société — toujours affichées pour les managers ──────── */}
-        {showCompany && (
-          <View style={S.companySection}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
-              <Ionicons name="business-outline" size={12} color={P.indigo} />
-              <Text style={S.companySectionTitle}>Company Information</Text>
-            </View>
-
-            {/* Grille 2 colonnes pour les champs société */}
-            <View style={S.companyGrid}>
-
-              {/* Nom société */}
-              <View style={S.companyField}>
-                <Text style={S.companyFieldLabel}>Company</Text>
-                <Text style={S.companyFieldValue} numberOfLines={1}>
-                  {companyName || <Text style={S.companyFieldEmpty}>—</Text>}
-                </Text>
-              </View>
-
-              {/* Secteur d'activité */}
-              <View style={S.companyField}>
-                <Text style={S.companyFieldLabel}>Industry</Text>
-                <Text style={S.companyFieldValue} numberOfLines={1}>
-                  {industry || <Text style={S.companyFieldEmpty}>—</Text>}
-                </Text>
-              </View>
-
-              {/* Pays */}
-              <View style={S.companyField}>
-                <Text style={S.companyFieldLabel}>Country</Text>
-                <Text style={S.companyFieldValue} numberOfLines={1}>
-                  {country || <Text style={S.companyFieldEmpty}>—</Text>}
-                </Text>
-              </View>
-
-              {/* Ville */}
-              <View style={S.companyField}>
-                <Text style={S.companyFieldLabel}>City</Text>
-                <Text style={S.companyFieldValue} numberOfLines={1}>
-                  {city || <Text style={S.companyFieldEmpty}>—</Text>}
-                </Text>
-              </View>
-
-              {/* ERP */}
-              <View style={S.companyField}>
-                <Text style={S.companyFieldLabel}>Current ERP</Text>
-                <Text style={S.companyFieldValue} numberOfLines={1}>
-                  {currentErp || <Text style={S.companyFieldEmpty}>Not specified</Text>}
-                </Text>
-              </View>
-
-              {/* Téléphone */}
-              {phone && (
-                <View style={S.companyField}>
-                  <Text style={S.companyFieldLabel}>Phone</Text>
-                  <Text style={S.companyFieldValue} numberOfLines={1}>{phone}</Text>
-                </View>
-              )}
-
-            </View>
-          </View>
-        )}
-
-        {/* ── Actions manager ───────────────────────────────────────────── */}
-        {hasActions && (
-          <View style={S.actionsRow}>
-            {isPending && (
-              <>
-                <ActionBtn label="Approve" icon="checkmark-circle-outline" variant="approve"
-                  onPress={() => handleApprove(u)} />
-                <ActionBtn label="Reject" icon="close-circle-outline" variant="reject"
-                  onPress={() => setRejectingManager(u)} />
-              </>
-            )}
-            {canSuspend && (
-              <ActionBtn label="Suspend Manager" icon="ban-outline" variant="suspend"
-                onPress={() => handleSuspend(u)} />
-            )}
-            {isSuspended && isManager && (
-              <ActionBtn label="Reactivate" icon="refresh-circle-outline" variant="reactivate"
-                onPress={() => handleReactivate(u)} />
-            )}
-          </View>
-        )}
-
-        {/* ── Agents : mention lecture seule ───────────────────────────── */}
-        {!hasActions && u.role === 'agent' && (
-          <View style={S.readOnlyBanner}>
-            <Ionicons name="information-circle-outline" size={13} color={P.slate400} />
-            <Text style={S.readOnlyTxt}>
-              Permissions managed by their manager · read only
-            </Text>
-          </View>
-        )}
-
-      </View>
-    );
-  };
-
-  // ── Tab config ────────────────────────────────────────────────────────────
-
-  const tabs: { id: AdminTab; label: string; icon: string }[] = [
+  const TABS: { id: AdminTab; label: string; icon: string }[] = [
     { id: 'pending',   label: 'Pending',   icon: 'time-outline'      },
     { id: 'managers',  label: 'Managers',  icon: 'briefcase-outline' },
     { id: 'agents',    label: 'Agents',    icon: 'people-outline'    },
@@ -489,49 +304,56 @@ export function AdminScreen() {
     { id: 'all',       label: 'All',       icon: 'grid-outline'      },
   ];
 
-  const pendingCount = tab === 'pending' ? users.length : 0;
-
   return (
-    <View style={{ flex: 1, backgroundColor: P.slate50 }}>
-
-      {/* Modal rejet */}
-      {rejectingManager && (
-        <RejectModal
-          manager={rejectingManager}
-          onClose={() => setRejectingManager(null)}
-          onReject={reason => handleReject(rejectingManager.id, reason)}
-        />
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      {rejectTarget && (
+        <RejectModal manager={rejectTarget} onClose={() => setRejectTarget(null)} onReject={reason => handleReject(rejectTarget.id, reason)} />
       )}
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <LinearGradient colors={[P.indigoDark, P.indigo]} style={S.header}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        <View>
-          <Text style={S.headerLabel}>WEEG PLATFORM</Text>
-          <Text style={S.headerTitle}>User Management</Text>
-          <Text style={S.headerSub}>Review requests · manage manager accounts</Text>
+      {/* Header */}
+      <LinearGradient colors={[T.navy, T.navy2, '#1d2f52']} style={S.header} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+        {/* Decorative elements */}
+        <View style={{ position: 'absolute', right: -50, top: -50, width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(79,70,229,0.12)' }} />
+        <View style={{ position: 'absolute', left: 80, bottom: -40, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.03)' }} />
+
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <View>
+            <Text style={{ fontSize: 9, fontWeight: '800', color: 'rgba(255,255,255,0.4)', letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 5 }}>WEEG PLATFORM</Text>
+            <Text style={{ fontSize: 22, fontWeight: '900', color: T.white, letterSpacing: -0.5 }}>User Management</Text>
+            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>Review requests · manage accounts</Text>
+          </View>
+          <View style={{ alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.10)', borderRadius: 14, paddingHorizontal: 18, paddingVertical: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+            <Text style={{ fontSize: 24, fontWeight: '900', color: T.white, lineHeight: 28 }}>{users.length}</Text>
+            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontWeight: '700', marginTop: 2, letterSpacing: 1, textTransform: 'uppercase' }}>users</Text>
+          </View>
         </View>
-        <Ionicons name="shield-checkmark" size={32} color="rgba(255,255,255,0.18)" />
+
+        {/* Pending alert */}
+        {tab !== 'pending' && pendingCount > 0 && (
+          <TouchableOpacity onPress={() => setTab('pending')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, backgroundColor: 'rgba(220,38,38,0.18)', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: 'rgba(248,113,113,0.25)' }}>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#f87171' }} />
+            <Text style={{ flex: 1, fontSize: 12.5, fontWeight: '600', color: '#fca5a5' }}>{pendingCount} pending request{pendingCount > 1 ? 's' : ''} awaiting review</Text>
+            <Ionicons name="chevron-forward" size={14} color="#f87171" />
+          </TouchableOpacity>
+        )}
       </LinearGradient>
 
-      {/* ── Tab bar ────────────────────────────────────────────────────── */}
-      <View style={S.tabBarWrap}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={S.tabBarContent}>
-          {tabs.map(t => {
+      {/* Tab bar */}
+      <View style={{ height: 50, backgroundColor: T.surface, borderBottomWidth: 1, borderBottomColor: T.border }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 10, alignItems: 'center', height: 50 }}>
+          {TABS.map(t => {
             const active = tab === t.id;
             return (
-              <TouchableOpacity key={t.id}
-                style={[S.tabBtn, active && S.tabBtnActive]}
-                onPress={() => setTab(t.id)}>
-                <Ionicons name={t.icon as any} size={14}
-                  color={active ? P.indigo : P.slate400} />
-                <Text style={[S.tabLabel, active && S.tabLabelActive]}>{t.label}</Text>
+              <TouchableOpacity
+                key={t.id}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, height: 50, borderBottomWidth: 2.5, borderBottomColor: active ? T.indigo : 'transparent', marginRight: 2 }}
+                onPress={() => setTab(t.id)}
+              >
+                <Ionicons name={t.icon as any} size={14} color={active ? T.indigo : T.text4} />
+                <Text style={{ fontSize: 13, fontWeight: active ? '700' : '500', color: active ? T.indigo : T.text4 }}>{t.label}</Text>
                 {t.id === 'pending' && pendingCount > 0 && (
-                  <View style={S.tabBadge}>
-                    <Text style={{ fontSize: 9, color: '#fff', fontWeight: '800' }}>
-                      {pendingCount}
-                    </Text>
+                  <View style={{ backgroundColor: T.red, borderRadius: 8, minWidth: 17, height: 17, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 9.5, color: T.white, fontWeight: '800' }}>{pendingCount}</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -540,157 +362,49 @@ export function AdminScreen() {
         </ScrollView>
       </View>
 
-      {/* ── Liste ──────────────────────────────────────────────────────── */}
+      {/* Content */}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={P.indigo} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.indigo} />}
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
       >
-        <View style={{ padding: 16, paddingBottom: 40 }}>
-          {loading ? (
-            <View style={{ alignItems: 'center', paddingTop: 80 }}>
-              <ActivityIndicator color={P.indigo} size="large" />
-              <Text style={{ marginTop: 12, fontSize: 13, color: P.slate400 }}>
-                Loading users…
-              </Text>
+        {loading ? (
+          <View style={{ alignItems: 'center', paddingTop: 80 }}>
+            <ActivityIndicator color={T.indigo} size="large" />
+            <Text style={{ marginTop: 12, fontSize: 13, color: T.text4 }}>Loading users…</Text>
+          </View>
+        ) : users.length === 0 ? (
+          <View style={{ backgroundColor: T.white, borderRadius: 20, padding: 48, alignItems: 'center', borderWidth: 1, borderColor: T.border, marginTop: 8 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: T.border2, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+              <Ionicons name="people-outline" size={36} color={T.text4} />
             </View>
-          ) : users.length === 0 ? (
-            <View style={S.emptyBox}>
-              <View style={S.emptyIconWrap}>
-                <Ionicons name="people-outline" size={36} color={P.slate400} />
-              </View>
-              <Text style={S.emptyTitle}>No users found</Text>
-              <Text style={S.emptySub}>
-                {tab === 'pending'
-                  ? 'No pending requests at the moment'
-                  : `No ${tab} accounts to display`}
-              </Text>
-            </View>
-          ) : (
-            users.map(u => renderUser(u))
-          )}
-        </View>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: T.text2, marginBottom: 6 }}>No users found</Text>
+            <Text style={{ fontSize: 13, color: T.text4, textAlign: 'center', lineHeight: 20 }}>
+              {tab === 'pending' ? 'No pending requests at the moment' : `No ${tab} accounts to display`}
+            </Text>
+          </View>
+        ) : (
+          users.map(u => (
+            <UserCard
+              key={u.id} u={u} tab={tab}
+              onApprove={() => handleApprove(u)}
+              onRejectStart={() => setRejectTarget(u)}
+              onSuspend={() => handleSuspend(u)}
+              onReactivate={() => handleReactivate(u)}
+            />
+          ))
+        )}
       </ScrollView>
     </View>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-
 const S = StyleSheet.create({
-  header: {
-    padding: 20, paddingTop: 52, paddingBottom: 20,
-    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
-  },
-  headerLabel: {
-    fontSize: 10, fontWeight: '800',
-    color: 'rgba(255,255,255,0.5)', letterSpacing: 2, marginBottom: 4,
-  },
-  headerTitle: { fontSize: 26, fontWeight: '900', color: P.white, letterSpacing: -0.5 },
-  headerSub:   { fontSize: 13, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
-
-  tabBarWrap: {
-    height: 52, backgroundColor: P.white,
-    borderBottomWidth: 1, borderBottomColor: P.slate200, zIndex: 10,
-  },
-  tabBarContent:  { paddingHorizontal: 12, alignItems: 'center' },
-  tabBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 14, height: 52,
-    borderBottomWidth: 2, borderBottomColor: 'transparent',
-  },
-  tabBtnActive:   { borderBottomColor: P.indigo },
-  tabLabel:       { fontSize: 13, fontWeight: '500', color: P.slate400 },
-  tabLabelActive: { color: P.indigo, fontWeight: '700' },
-  tabBadge: {
-    backgroundColor: P.red, borderRadius: 8,
-    minWidth: 16, height: 16, paddingHorizontal: 4,
-    alignItems: 'center', justifyContent: 'center',
-  },
-
-  card: {
-    backgroundColor: P.white, borderRadius: 16, marginBottom: 12,
-    padding: 16, borderWidth: 1, borderColor: P.slate200,
-    shadowColor: P.slate900, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
-  },
-
-  avatar:    { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  avatarTxt: { fontSize: 16, fontWeight: '900', color: P.white, letterSpacing: 0.5 },
-
-  userName:  { fontSize: 15, fontWeight: '800', color: P.slate900, letterSpacing: -0.2 },
-  userEmail: { fontSize: 12, color: P.slate400, marginTop: 2 },
-
-  companySection: {
-    marginTop: 14, backgroundColor: P.slate50,
-    borderRadius: 12, padding: 12,
-    borderWidth: 1, borderColor: P.slate200,
-  },
-  companySectionTitle: {
-    fontSize: 11, fontWeight: '700', color: P.indigo,
-    textTransform: 'uppercase', letterSpacing: 0.8,
-  },
-  companyGrid: {
-    flexDirection: 'row', flexWrap: 'wrap',
-    gap: 0, marginTop: 4,
-  },
-  companyField: {
-    width: '50%', paddingVertical: 6, paddingRight: 8,
-  },
-  companyFieldLabel: {
-    fontSize: 10, fontWeight: '700', color: P.slate400,
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2,
-  },
-  companyFieldValue: {
-    fontSize: 13, fontWeight: '600', color: P.slate700,
-  },
-  companyFieldEmpty: {
-    fontSize: 13, fontWeight: '400', color: P.slate300,
-    fontStyle: 'italic',
-  },
-
-  tag:    {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: P.white, paddingHorizontal: 8, paddingVertical: 4,
-    borderRadius: 8, borderWidth: 1, borderColor: P.slate200,
-  },
-  tagTxt: { fontSize: 11, color: P.slate600, fontWeight: '500', maxWidth: 140 },
-
-  actionsRow: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 8,
-    marginTop: 14, paddingTop: 12,
-    borderTopWidth: 1, borderTopColor: P.slate100,
-  },
-  actionBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 9, borderWidth: 1,
-  },
-
-  readOnlyBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    marginTop: 12, paddingTop: 10,
-    borderTopWidth: 1, borderTopColor: P.slate100,
-  },
-  readOnlyTxt: { fontSize: 11, color: P.slate400, fontStyle: 'italic' },
-
-  emptyBox:      { backgroundColor: P.white, borderRadius: 20, padding: 48,
-                   alignItems: 'center', borderWidth: 1, borderColor: P.slate200, marginTop: 8 },
-  emptyIconWrap: { width: 72, height: 72, borderRadius: 20, backgroundColor: P.slate100,
-                   alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  emptyTitle:    { fontSize: 16, fontWeight: '800', color: P.slate700, marginBottom: 6 },
-  emptySub:      { fontSize: 13, color: P.slate400, textAlign: 'center', lineHeight: 20 },
-
-  quickReason:       { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 9,
-                       borderWidth: 1.5, borderColor: P.slate200, backgroundColor: P.slate50 },
-  quickReasonActive: { borderColor: P.indigo, backgroundColor: P.indigoLight },
-  rejectInput:       { borderWidth: 1.5, borderColor: P.slate200, borderRadius: 12,
-                       padding: 14, fontSize: 14, color: P.slate700,
-                       backgroundColor: P.slate50, minHeight: 110, textAlignVertical: 'top' },
-
-  cancelBtn: {
-    flex: 1, paddingVertical: 13, borderRadius: 12,
-    backgroundColor: P.slate100, alignItems: 'center', justifyContent: 'center',
+  header: { padding: 20, paddingTop: 18, paddingBottom: 18, position: 'relative', overflow: 'hidden' },
+  card:   {
+    backgroundColor: T.white, borderRadius: 16, marginBottom: 10, padding: 14,
+    borderWidth: 1, borderColor: T.border,
+    shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
 });

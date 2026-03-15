@@ -1,137 +1,125 @@
-// FASI Mobile Theme - Matching Web Design Exactly
+// WEEG Mobile Theme v2 — Premium Design System
 export const Colors = {
-  // Primary Brand Colors (indigo/violet - matches web)
-  primary: '#4f46e5',        // --primary
-  primaryDark: '#6366f1',    // dark mode primary
-  violet: '#7c3aed',
-  violet600: '#7c3aed',
+  // Brand
+  navy:      '#050d1a',
+  navy2:     '#0a1628',
+  navy3:     '#101f35',
+  blue:      '#1a5cf0',
+  blue2:     '#2568f5',
+  blue3:     '#3d7ff6',
+  blueDim:   '#1040a0',
+  orange:    '#f07020',
+  orange2:   '#f58030',
+  teal:      '#0dcfaa',
+  teal2:     '#0bb896',
+  purple:    '#7c3aed',
 
-  // Gradients (replicate web gradients)
-  gradientStart: '#4f46e5',  // indigo-600
-  gradientEnd: '#7c3aed',    // violet-600
-  gradientBlue: '#2563eb',   // blue-600
-  gradientPurple: '#9333ea', // purple-600
+  // Status
+  red:       '#e83535',
+  redBg:     '#fef0f0',
+  redText:   '#b01f1f',
+  amber:     '#f59e0b',
+  amberBg:   '#fffbeb',
+  amberText: '#92400e',
+  green:     '#10b981',
+  greenBg:   '#f0fdf4',
+  greenText: '#065f46',
 
   // Backgrounds
-  background: '#fafafa',
-  backgroundDark: '#0f172a',
-  card: '#ffffff',
-  cardDark: '#1e293b',
+  bg:        '#f4f6fb',
+  surface:   '#ffffff',
+  surface2:  '#f9fafc',
+
+  // Borders
+  border:    '#e4e9f0',
+  border2:   '#d0d8e8',
 
   // Text
-  foreground: '#0f172a',
-  foregroundDark: '#f8fafc',
-  muted: '#717182',
-  mutedDark: '#94a3b8',
-
-  // Border
-  border: 'rgba(0,0,0,0.1)',
-  borderDark: '#334155',
-
-  // Status Colors
-  success: '#10b981',        // emerald-500
-  warning: '#f59e0b',        // amber-500
-  danger: '#ef4444',         // red-500
-  info: '#3b82f6',           // blue-500
-
-  // Chart Colors (matching web)
-  chart1: '#4f46e5',
-  chart2: '#8b5cf6',
-  chart3: '#f59e0b',
-  chart4: '#10b981',
-  chart5: '#ef4444',
-
-  // Sidebar
-  sidebar: '#f8fafc',
-  sidebarDark: '#1e293b',
-  sidebarBorder: '#e2e8f0',
+  text:      '#0d1929',
+  text2:     '#4a5568',
+  text3:     '#8492a6',
 
   // Misc
-  white: '#ffffff',
-  black: '#000000',
-  gray50: '#f8fafc',
-  gray100: '#f1f5f9',
-  gray200: '#e2e8f0',
-  gray300: '#cbd5e1',
-  gray400: '#94a3b8',
-  gray500: '#64748b',
-  gray600: '#475569',
-  gray700: '#334155',
-  gray800: '#1e293b',
-  gray900: '#0f172a',
-  gray950: '#020617',
+  white:     '#ffffff',
+  black:     '#000000',
 
-  indigo50: '#eef2ff',
-  indigo100: '#e0e7ff',
-  indigo600: '#4f46e5',
-  indigo700: '#4338ca',
-  indigo950: '#1e1b4b',
-
-  violet50: '#f5f3ff',
-  violet100: '#ede9fe',
-  violet950: '#2e1065',
-
-  red50: '#fef2f2',
-  red100: '#fee2e2',
-  red500: '#ef4444',
-  red600: '#dc2626',
-  red800: '#991b1b',
-
-  green50: '#f0fdf4',
-  green100: '#dcfce7',
-  green500: '#22c55e',
-  green600: '#16a34a',
-  green800: '#166534',
-
-  yellow50: '#fefce8',
-  yellow100: '#fef9c3',
-  yellow500: '#eab308',
-  yellow600: '#ca8a04',
-  yellow800: '#854d0e',
-
-  blue50: '#eff6ff',
-  blue100: '#dbeafe',
-  blue500: '#3b82f6',
-  blue600: '#2563eb',
-  blue800: '#1e40af',
-
-  orange500: '#f97316',
-  orange600: '#ea580c',
-
-  pink500: '#ec4899',
-  cyan500: '#06b6d4',
-  emerald500: '#10b981',
-  purple500: '#a855f7',
-  purple600: '#9333ea',
+  // Legacy compatibility
+  primary:        '#1a5cf0',
+  primaryDark:    '#2568f5',
+  violet:         '#7c3aed',
+  violet600:      '#7c3aed',
+  gradientStart:  '#1a5cf0',
+  gradientEnd:    '#7c3aed',
+  background:     '#f4f6fb',
+  backgroundDark: '#0f172a',
+  card:           '#ffffff',
+  foreground:     '#0d1929',
+  muted:          '#8492a6',
+  success:        '#10b981',
+  warning:        '#f59e0b',
+  danger:         '#e83535',
+  info:           '#3b82f6',
+  indigo600:      '#1a5cf0',
+  gray50:         '#f9fafc',
+  gray100:        '#f4f6fb',
+  gray200:        '#e4e9f0',
+  gray300:        '#d0d8e8',
+  gray400:        '#b0bec8',
+  gray500:        '#8492a6',
+  gray600:        '#6b7a8d',
+  gray700:        '#4a5568',
+  gray800:        '#2d3748',
+  gray900:        '#0d1929',
+  indigo50:       '#eef2ff',
+  indigo100:      '#e0e7ff',
+  red50:          '#fef0f0',
+  red100:         '#fde0e0',
+  red500:         '#e83535',
+  red600:         '#cc2a2a',
+  green50:        '#f0fdf4',
+  green100:       '#dcfce7',
+  green500:       '#10b981',
+  green600:       '#059669',
+  blue50:         '#eff6ff',
+  blue100:        '#dbeafe',
+  blue500:        '#3b82f6',
+  blue600:        '#2563eb',
+  orange500:      '#f07020',
+  orange600:      '#ea580c',
+  purple500:      '#a855f7',
+  purple600:      '#9333ea',
+  emerald500:     '#10b981',
+  yellow50:       '#fefce8',
+  yellow500:      '#eab308',
 };
 
 export const Spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
+  xs:   4,
+  sm:   8,
+  md:   12,
   base: 16,
-  lg: 20,
-  xl: 24,
+  lg:   20,
+  xl:   24,
   '2xl': 32,
   '3xl': 48,
   '4xl': 64,
 };
 
 export const BorderRadius = {
-  sm: 6,
-  md: 8,
-  lg: 12,
-  xl: 16,
+  sm:   6,
+  md:   8,
+  lg:   12,
+  xl:   16,
   '2xl': 20,
   full: 9999,
 };
 
 export const Typography = {
-  xs: 11,
-  sm: 13,
+  xs:   11,
+  sm:   13,
   base: 15,
-  lg: 17,
-  xl: 19,
+  lg:   17,
+  xl:   19,
   '2xl': 22,
   '3xl': 28,
   '4xl': 34,
@@ -146,24 +134,55 @@ export const Shadow = {
     elevation: 1,
   },
   md: {
-    shadowColor: '#000',
+    shadowColor: '#0a1628',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
     elevation: 3,
   },
   lg: {
-    shadowColor: '#000',
+    shadowColor: '#0a1628',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
     elevation: 6,
   },
   xl: {
-    shadowColor: '#4f46e5',
+    shadowColor: '#1a5cf0',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 20,
     elevation: 10,
   },
 };
+
+// Risk color helpers
+export function getRiskColor(risk: string): string {
+  switch (risk) {
+    case 'critical': return Colors.red;
+    case 'high':     return Colors.amber;
+    case 'medium':   return Colors.blue;
+    case 'low':      return Colors.green;
+    default:         return Colors.text3;
+  }
+}
+
+export function getRiskBg(risk: string): string {
+  switch (risk) {
+    case 'critical': return Colors.redBg;
+    case 'high':     return Colors.amberBg;
+    case 'medium':   return Colors.blue50;
+    case 'low':      return Colors.greenBg;
+    default:         return Colors.surface2;
+  }
+}
+
+export function getStatusColor(status: string): string {
+  switch (status) {
+    case 'ok':       return Colors.green;
+    case 'low':      return Colors.amber;
+    case 'critical': return Colors.orange;
+    case 'out':      return Colors.red;
+    default:         return Colors.green;
+  }
+}

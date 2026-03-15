@@ -1,3 +1,19 @@
+/**
+ * DashboardScreen.tsx — WEEG Mobile v2
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Filters on risky customers:
+ *   risk  → GET /api/aging/risk/?risk=X          (server-side)
+ *   branch → no direct aging branch param → cross-ref via GET /api/aging/risk/
+ *            The backend AgingRiskView returns branch via _resolve_branch()
+ *            which cross-references sales transactions.
+ *            We filter by branch client-side on the returned results
+ *            (same approach as AgingPage.tsx).
+ *
+ * KPIs come from:
+ *   GET /api/kpi/sales/   → totalSales, salesEvolution
+ *   GET /api/kpi/credit/  → receivables, overdueRate, collectionRate, dso
+ *   GET /api/inventory/branch-summary/ → stockValue
+ */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
@@ -5,508 +21,437 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, BorderRadius, Shadow } from '../../constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors, Shadow, BorderRadius, getRiskColor } from '../../constants/theme';
+import {
+  RiskPill, BranchTag, SectionHeader, SummaryStrip,
+  MiniKpi, FilterChip, EmptyState, Avatar,
+} from '../../components/SharedComponents';
+import { FilterSheet, ActiveFilterChips } from '../../components/FilterSheet';
 import {
   DashboardService,
   AgingService,
+  TransactionMobileService,
   type DashboardKPIs,
   type AgingRiskItem,
   type MonthlySummaryItem,
 } from '../../lib/mobileDataService';
 
 const { width } = Dimensions.get('window');
-const CARD_W = (width - Spacing.base * 2 - 12) / 2;
+const CARD_W = (width - 32 - 10) / 2;
 
-// ── Formatters ────────────────────────────────────────────────────────────────
-
-const fmt = (n: number | null | undefined): string => {
-  const v = Number(n);
-  if (n == null || isNaN(v)) return '—';
-  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000)     return `${(v / 1_000).toFixed(0)}K`;
-  return v.toFixed(0);
+const fmt = (n?: number | null): string => {
+  if (n == null || isNaN(n)) return '—';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}K`;
+  return Math.round(n).toLocaleString();
 };
+const fmtCurrency = (n?: number | null) => n == null ? '—' : `${fmt(n)} DL`;
+const safe = (n?: number | null, fb = 0) => n == null || isNaN(Number(n)) ? fb : Number(n);
 
-const safeNum = (n: number | null | undefined, fallback = 0): number =>
-  n == null || isNaN(Number(n)) ? fallback : Number(n);
-
-const fmtCurrency = (n: number | null | undefined) =>
-  n == null || isNaN(Number(n)) ? '—' : `${fmt(n)} DL`;
-
-// ── Sparkline (pure RN Views — no SVG dep) ───────────────────────────────────
-
-function Sparkline({ color = Colors.indigo600 }: { color?: string }) {
-  const pts = [30, 42, 35, 55, 40, 60, 45, 65, 50, 70, 55, 72];
-  const H = 28;
-  const W = CARD_W - 40;
-  const max = Math.max(...pts);
-  const min = Math.min(...pts);
+// ─── Sparkline ────────────────────────────────────────────────────────────────
+function Sparkline({ color, pts }: { color: string; pts: number[] }) {
+  const H = 28; const W = CARD_W - 40;
+  const max = Math.max(...pts); const min = Math.min(...pts);
   const px = (i: number) => (i / (pts.length - 1)) * W;
   const py = (v: number) => H - ((v - min) / (max - min + 1)) * H;
-
   return (
-    <View style={{ height: H, overflow: 'hidden', marginTop: 8 }}>
+    <View style={{ height: H, overflow:'hidden', marginTop:8 }}>
       {pts.map((v, i) => {
         if (i === 0) return null;
-        const x1 = px(i - 1), y1 = py(pts[i - 1]), x2 = px(i), y2 = py(v);
-        const len = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
-        const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+        const x1 = px(i-1), y1 = py(pts[i-1]), x2 = px(i), y2 = py(v);
+        const len   = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
+        const angle = Math.atan2(y2-y1, x2-x1) * 180 / Math.PI;
         return (
-          <View
-            key={i}
-            style={{
-              position: 'absolute', left: x1, top: y1,
-              width: len, height: 2, backgroundColor: color,
-              transform: [{ rotate: `${angle}deg` }],
-              transformOrigin: '0 50%',
-            } as any}
-          />
+          <View key={i} style={{
+            position:'absolute', left:x1, top:y1,
+            width:len, height:2, backgroundColor:color,
+            transform:[{ rotate:`${angle}deg` }],
+            // @ts-ignore
+            transformOrigin:'0 50%',
+          }} />
         );
       })}
     </View>
   );
 }
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-
-function KPICard({
-  title, value, trend, icon, isPositive, color, loading,
-}: {
-  title: string;
-  value: string;
-  trend?: number | null;
-  icon: string;
-  isPositive?: boolean;
-  color: string;
-  loading?: boolean;
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+function KpiCard({ title, value, trend, isPositive, icon, accentColor, sparkPts, loading }: {
+  title: string; value: string; trend?: number|null; isPositive?: boolean;
+  icon: string; accentColor: string; sparkPts: number[]; loading?: boolean;
 }) {
-  const trendColor = isPositive ? '#16a34a' : '#dc2626';
-
   return (
-    <View style={[st.kpiCard, Shadow.sm]}>
-      <View style={st.kpiTop}>
-        <View style={[st.kpiIcon, { backgroundColor: color + '20' }]}>
-          <Ionicons name={icon as any} size={18} color={color} />
-        </View>
-        {trend != null && (
-          <Text style={[st.kpiTrend, { color: trendColor }]}>
-            {isPositive ? '↑' : '↓'} {safeNum(trend) >= 0 ? Math.abs(safeNum(trend)).toFixed(1) : Math.abs(safeNum(trend)).toFixed(1)}%
-          </Text>
-        )}
+    <View style={[S.kpiCard, Shadow.sm]}>
+      <View style={[S.kpiAccent, { backgroundColor:accentColor }]} />
+      <View style={[S.kpiIcon, { backgroundColor:accentColor+'18' }]}>
+        <Ionicons name={icon as any} size={16} color={accentColor} />
       </View>
-      <Text style={st.kpiLabel}>{title}</Text>
-      {loading ? (
-        <View style={{ height: 24, justifyContent: 'center' }}>
-          <View style={[st.skeleton, { width: 80, height: 18 }]} />
+      <Text style={S.kpiLabel}>{title}</Text>
+      {loading
+        ? <View style={[S.skeleton, { width:80, height:20, marginTop:2 }]} />
+        : <Text style={S.kpiValue}>{value}</Text>
+      }
+      {trend != null && !loading && (
+        <View style={{ flexDirection:'row', alignItems:'center', gap:3, marginTop:4 }}>
+          <Text style={{ fontSize:10, fontWeight:'700', color: isPositive ? Colors.green : Colors.red }}>
+            {isPositive ? '↑' : '↓'} {Math.abs(safe(trend)).toFixed(1)}%
+          </Text>
         </View>
-      ) : (
-        <Text style={st.kpiValue}>{value}</Text>
       )}
-      <Sparkline color={color} />
+      <Sparkline color={accentColor} pts={sparkPts} />
     </View>
   );
 }
 
-// ── Risk Customer Row ─────────────────────────────────────────────────────────
-
-function RiskCustomerRow({
-  item,
-  onPress,
-}: {
-  item: AgingRiskItem;
-  onPress?: () => void;
-}) {
-  const riskColors: Record<string, string> = {
-    critical: '#dc2626',
-    high:     '#f97316',
-    medium:   '#f59e0b',
-    low:      '#16a34a',
-  };
-  const riskColor = riskColors[item.risk_score] ?? Colors.gray500;
+// ─── Risk Customer Row ────────────────────────────────────────────────────────
+function RiskRow({ item, onPress }: { item: AgingRiskItem; onPress?: () => void }) {
+  const riskColor  = getRiskColor(item.risk_score);
   const overduePct = item.total > 0 ? (item.overdue_total / item.total) * 100 : 0;
-
   return (
-    <TouchableOpacity
-      style={[st.riskRow, Shadow.sm]}
-      onPress={onPress}
-      activeOpacity={0.75}
-    >
-      <View style={st.riskTop}>
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <Text style={st.riskName} numberOfLines={1}>
-            {item.customer_name || item.account}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
-            <Text style={{ fontSize: 12, color: Colors.gray500 }}>
-              {fmtCurrency(item.total)}
-            </Text>
-            <View style={[st.riskBadge, { backgroundColor: riskColor }]}>
-              <Text style={st.riskBadgeTxt}>{item.risk_score.toUpperCase()}</Text>
-            </View>
-            {item.branch && (
-              <Text style={{ fontSize: 11, color: Colors.gray400 }}>{item.branch}</Text>
-            )}
+    <TouchableOpacity style={[S.riskRow, Shadow.sm]} onPress={onPress} activeOpacity={0.75}>
+      <View style={{ flexDirection:'row', alignItems:'flex-start', gap:10 }}>
+        <Avatar name={item.customer_name || item.account} size={36} colors={[Colors.navy2, Colors.blueDim as any]} />
+        <View style={{ flex:1, minWidth:0 }}>
+          <Text style={S.riskName} numberOfLines={1}>{item.customer_name || item.account}</Text>
+          <View style={{ flexDirection:'row', alignItems:'center', gap:6, marginTop:3, flexWrap:'wrap' }}>
+            <Text style={{ fontSize:10.5, color:Colors.text3 }}>{item.account_code}</Text>
+            <RiskPill risk={item.risk_score} />
+            {item.branch && <BranchTag label={item.branch} />}
           </View>
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: '#dc2626' }}>
-            {fmtCurrency(item.overdue_total)}
-          </Text>
-          <Text style={{ fontSize: 10, color: Colors.gray400, marginTop: 1 }}>overdue</Text>
+        <View style={{ alignItems:'flex-end', flexShrink:0 }}>
+          <Text style={{ fontSize:14, fontWeight:'700', color:Colors.text }}>{fmtCurrency(item.total)}</Text>
+          <Text style={{ fontSize:10.5, fontWeight:'600', color:Colors.red, marginTop:2 }}>{fmtCurrency(item.overdue_total)}</Text>
         </View>
       </View>
-
-      {/* Overdue progress bar */}
-      <View style={{ marginTop: 10 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-          <Text style={{ fontSize: 10, color: Colors.gray400 }}>Overdue ratio</Text>
-          <Text style={{ fontSize: 10, fontWeight: '700', color: riskColor }}>
-            {safeNum(overduePct).toFixed(0)}%
-          </Text>
+      <View style={{ marginTop:10 }}>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', marginBottom:4 }}>
+          <Text style={{ fontSize:9.5, color:Colors.text3 }}>Overdue ratio</Text>
+          <Text style={{ fontSize:9.5, fontWeight:'700', color:riskColor }}>{safe(overduePct).toFixed(0)}%</Text>
         </View>
-        <View style={{ height: 5, borderRadius: 3, backgroundColor: Colors.gray100, overflow: 'hidden' }}>
-          <LinearGradient
-            colors={[riskColor + '80', riskColor]}
-            style={{ width: `${Math.min(100, overduePct)}%` as any, height: 5, borderRadius: 3 }}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          />
+        <View style={{ height:4, borderRadius:2, backgroundColor:Colors.bg }}>
+          <View style={{ height:4, borderRadius:2, backgroundColor:riskColor, width:`${Math.min(100, overduePct)}%` as any }} />
         </View>
       </View>
     </TouchableOpacity>
   );
 }
 
-// ── Global Risk Gauge ─────────────────────────────────────────────────────────
-
-function RiskGauge({ criticalCount, totalCount }: { criticalCount: number; totalCount: number }) {
-  const pct = totalCount > 0 ? Math.min(90, (criticalCount / totalCount) * 100 + 20) : 20;
-  const riskLevel = criticalCount > 1 ? 'HIGH' : criticalCount === 1 ? 'MEDIUM' : 'LOW';
-  const riskColor = criticalCount > 1 ? '#dc2626' : criticalCount === 1 ? '#f59e0b' : '#16a34a';
-
+// ─── Monthly Bar Chart ────────────────────────────────────────────────────────
+function MonthlyBars({ data }: { data: MonthlySummaryItem[] }) {
+  const last6 = data.slice(-6);
+  const maxS  = Math.max(...last6.map(m => m.total_sales), 1);
   return (
-    <View style={[st.riskGauge, Shadow.sm]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <Ionicons name="shield-outline" size={20} color={riskColor} />
-        <Text style={{ fontSize: 15, fontWeight: '700', color: Colors.foreground }}>
-          Global Risk Level
-        </Text>
-        <View style={{ marginLeft: 'auto' as any, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, backgroundColor: riskColor + '20' }}>
-          <Text style={{ fontSize: 11, fontWeight: '800', color: riskColor }}>{riskLevel}</Text>
+    <View style={S.chartCard}>
+      <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+        <Text style={{ fontSize:13, fontWeight:'700', color:Colors.text }}>Monthly Trend</Text>
+        <View style={{ paddingHorizontal:8, paddingVertical:3, borderRadius:BorderRadius.full, backgroundColor:'rgba(26,92,240,0.08)', borderWidth:1, borderColor:'rgba(26,92,240,0.15)' }}>
+          <Text style={{ fontSize:10, fontWeight:'600', color:Colors.blue }}>Last 6 months</Text>
         </View>
       </View>
-      <View style={{ height: 8, borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
-        <LinearGradient
-          colors={['#16a34a', '#f59e0b', '#dc2626']}
-          style={{ height: 8, borderRadius: 4 }}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-        />
-        <View style={{
-          position: 'absolute', top: -3,
-          left: `${pct}%` as any,
-          width: 14, height: 14, borderRadius: 7,
-          backgroundColor: '#fff', borderWidth: 2, borderColor: Colors.foreground,
-        }} />
-      </View>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-        <Text style={{ fontSize: 10, color: '#16a34a' }}>Low</Text>
-        <Text style={{ fontSize: 10, color: '#f59e0b' }}>Medium</Text>
-        <Text style={{ fontSize: 10, color: '#dc2626' }}>High</Text>
-      </View>
-    </View>
-  );
-}
-
-// ── Credit Health Row ─────────────────────────────────────────────────────────
-
-function CreditMetricRow({
-  label, value, unit, good, loading,
-}: {
-  label: string; value: number; unit: string; good: boolean; loading: boolean;
-}) {
-  const color = good ? '#16a34a' : '#dc2626';
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.gray100 }}>
-      <Text style={{ fontSize: 13, color: Colors.gray600 }}>{label}</Text>
-      {loading ? (
-        <View style={[st.skeleton, { width: 60, height: 14 }]} />
-      ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color }}>
-            {safeNum(value).toFixed(1)}{unit}
-          </Text>
-          <View style={{ paddingHorizontal: 7, paddingVertical: 2, borderRadius: 20, backgroundColor: color + '18' }}>
-            <Text style={{ fontSize: 9, fontWeight: '800', color }}>{good ? 'GOOD' : 'ALERT'}</Text>
+      <View style={{ flexDirection:'row', gap:10, marginBottom:10 }}>
+        {[['#1a5cf0','Sales'],['#f07020','Purchases']].map(([c,l]) => (
+          <View key={l} style={{ flexDirection:'row', alignItems:'center', gap:5 }}>
+            <View style={{ width:10, height:10, borderRadius:2, backgroundColor:c }} />
+            <Text style={{ fontSize:10.5, fontWeight:'600', color:c }}>{l}</Text>
           </View>
-        </View>
-      )}
+        ))}
+      </View>
+      <View style={{ flexDirection:'row', alignItems:'flex-end', gap:4, height:80, paddingHorizontal:4 }}>
+        {last6.map((m, i) => {
+          const sh = Math.round((m.total_sales     / maxS) * 64);
+          const ph = Math.round((m.total_purchases / maxS) * 64);
+          return (
+            <View key={i} style={{ flex:1, flexDirection:'row', alignItems:'flex-end', gap:2 }}>
+              <LinearGradient colors={[Colors.blue3 as any, Colors.blueDim as any]} style={{ flex:1, height:sh, borderRadius:3 }} start={{ x:0,y:0 }} end={{ x:0,y:1 }} />
+              <View style={{ flex:1, height:ph, borderRadius:3, backgroundColor:'rgba(240,112,32,0.55)' }} />
+            </View>
+          );
+        })}
+      </View>
+      <View style={{ flexDirection:'row', gap:4, paddingTop:6, paddingHorizontal:4 }}>
+        {last6.map((m, i) => (
+          <Text key={i} style={{ flex:1, textAlign:'center', fontSize:9, color:Colors.text3, fontWeight:'600' }}>{m.month_label}</Text>
+        ))}
+      </View>
     </View>
   );
 }
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
-
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export function DashboardScreen({ navigation }: any) {
-  const [kpis, setKpis]       = useState<DashboardKPIs | null>(null);
-  const [monthly, setMonthly] = useState<MonthlySummaryItem[]>([]);
-  const [topRisk, setTopRisk] = useState<AgingRiskItem[]>([]);
-  const [loading, setLoading]     = useState(true);
+  const insets = useSafeAreaInsets();
+  const [kpis,       setKpis]       = useState<DashboardKPIs|null>(null);
+  const [monthly,    setMonthly]    = useState<MonthlySummaryItem[]>([]);
+  const [topRisk,    setTopRisk]    = useState<AgingRiskItem[]>([]);
+  const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [error,      setError]      = useState<string|null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  // Filters — risk sent to /api/aging/risk/?risk=X; branch is client-side on returned results
+  const [filters,    setFilters]    = useState({ risk:'all', branch:'all' });
+  const [availableBranches, setAvailableBranches] = useState<string[]>([]);
 
-  const fetchAll = useCallback(async (isRefresh = false) => {
+  const fetchAll = useCallback(async (isRefresh = false, f = filters) => {
     if (!isRefresh) setLoading(true);
     setError(null);
     try {
+      // Risk filter sent to backend; branch is resolved by backend via _resolve_branch()
+      const riskParam = f.risk !== 'all' ? f.risk : undefined;
       const [kpisRes, monthlyRes, riskRes] = await Promise.allSettled([
         DashboardService.getDashboardKPIs(),
         DashboardService.getMonthlySummary(),
-        AgingService.getTopRisk(5),
+        AgingService.getTopRisk({ limit: 10, risk: riskParam }),
       ]);
-
-      if (kpisRes.status === 'fulfilled')   setKpis(kpisRes.value);
+      if (kpisRes.status    === 'fulfilled') setKpis(kpisRes.value);
       if (monthlyRes.status === 'fulfilled') setMonthly(monthlyRes.value.summary ?? []);
-      if (riskRes.status === 'fulfilled')   setTopRisk(riskRes.value.top_risk ?? []);
-
-      if (kpisRes.status === 'rejected') {
-        setError('Failed to load KPIs. Check your connection.');
-      }
+      if (riskRes.status    === 'fulfilled') setTopRisk(riskRes.value.top_risk ?? []);
+      if (kpisRes.status    === 'rejected')  setError('Failed to load KPIs.');
     } catch (e: any) {
       setError(e.message || 'Unexpected error');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [filters]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchAll(true);
-  };
+  // Load branch options for filter
+  useEffect(() => {
+    TransactionMobileService.getBranches()
+      .then(r => setAvailableBranches(r.branches ?? []))
+      .catch(() => {});
+  }, []);
 
-  // Compute sales trend from last 2 months
+  // Branch filter: client-side on topRisk results
+  // (branch is resolved by backend via _resolve_branch() from sales transactions)
+  const filteredRisk = filters.branch !== 'all'
+    ? topRisk.filter(r => r.branch === filters.branch)
+    : topRisk;
+
   const salesTrend = (() => {
-    const sorted = [...monthly].sort((a, b) =>
-      a.year * 100 + a.month - (b.year * 100 + b.month),
-    );
-    const last = sorted.slice(-2);
+    const sorted = [...monthly].sort((a,b) => a.year*100+a.month - (b.year*100+b.month));
+    const last   = sorted.slice(-2);
     if (last.length < 2 || last[0].total_sales === 0) return null;
     return ((last[1].total_sales - last[0].total_sales) / last[0].total_sales) * 100;
   })();
 
-  const criticalCount = topRisk.filter(r => r.risk_score === 'critical').length;
-  const riskLevel = criticalCount > 1 ? 'HIGH' : criticalCount === 1 ? 'MEDIUM' : 'LOW';
-  const riskColor = criticalCount > 1 ? '#dc2626' : criticalCount === 1 ? '#f59e0b' : '#16a34a';
+  const sp1=[30,42,35,55,40,60,45,65,50,70,55,72];
+  const sp2=[60,55,70,65,80,75,85,70,90,75,88,92];
+  const sp3=[85,82,78,80,75,72,70,73,68,71,69,74];
+  const sp4=[45,50,48,55,52,60,58,65,62,68,65,71];
+
+  const hasActive = filters.risk !== 'all' || filters.branch !== 'all';
 
   return (
-    <ScrollView
-      style={st.container}
-      showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.indigo600} />}
-    >
-      {/* ── Header gradient ── */}
+    <View style={{ flex:1, backgroundColor:Colors.bg }}>
+      {/* Header */}
       <LinearGradient
-        colors={[Colors.indigo600, Colors.violet600]}
-        style={st.headerGrad}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        colors={[Colors.navy2, Colors.navy3]}
+        style={[S.header, { paddingTop: insets.top + 8 }]}
+        start={{ x:0,y:0 }} end={{ x:1,y:1 }}
       >
-        <View>
-          <Text style={st.headerTitle}>Dashboard</Text>
-          <Text style={st.headerSub}>Business overview</Text>
+        <View style={S.headerTop}>
+          <Text style={S.headerLogo}>W<Text style={{ color:Colors.orange }}>EEG</Text></Text>
+          <View style={{ flexDirection:'row', gap:8, alignItems:'center' }}>
+            <TouchableOpacity
+              style={[S.iconBtn, hasActive && { backgroundColor:'rgba(26,92,240,0.4)' }]}
+              onPress={() => setFilterOpen(true)}
+            >
+              <Ionicons name="options-outline" size={18} color="rgba(255,255,255,0.85)" />
+              {hasActive && <View style={S.notifDot} />}
+            </TouchableOpacity>
+            <TouchableOpacity style={S.iconBtn}>
+              <Ionicons name="notifications-outline" size={18} color="rgba(255,255,255,0.85)" />
+              <View style={S.notifDot} />
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={[st.headerRiskBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-          <View style={[st.riskDot, { backgroundColor: riskColor }]} />
-          <Text style={st.riskTxt}>Risk: {riskLevel}</Text>
-        </View>
+        <Text style={S.headerGreeting}>Good morning 👋</Text>
+        <Text style={S.headerSub}>Sunday, March 15 · Dashboard overview</Text>
       </LinearGradient>
 
-      {/* ── Error banner ── */}
-      {error && (
-        <View style={st.errorBanner}>
-          <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
-          <Text style={st.errorTxt} numberOfLines={2}>{error}</Text>
-          <TouchableOpacity onPress={() => fetchAll()} style={st.retryBtn}>
-            <Text style={st.retryTxt}>Retry</Text>
-          </TouchableOpacity>
+      {/* Active filter chips */}
+      {hasActive && (
+        <View style={{ backgroundColor:Colors.surface, borderBottomWidth:1, borderBottomColor:Colors.border, paddingVertical:8 }}>
+          <ActiveFilterChips
+            values={filters}
+            labelMap={{ risk:'Risk', branch:'Branch' }}
+            onClear={key => {
+              const newF = { ...filters, [key]:'all' };
+              setFilters(newF);
+              fetchAll(false, newF);
+            }}
+          />
         </View>
       )}
 
-      {/* ── KPI Grid ── */}
-      <View style={st.section}>
-        <Text style={st.sectionTitle}>Key Metrics</Text>
-        <View style={st.kpiGrid}>
-          <KPICard
-            title="Total Sales"
-            value={kpis ? fmtCurrency(kpis.totalSales) : '—'}
-            trend={salesTrend}
-            isPositive={(salesTrend ?? 0) >= 0}
-            icon="trending-up-outline"
-            color={Colors.indigo600}
-            loading={loading}
-          />
-          <KPICard
-            title="Stock Value"
-            value={kpis ? fmtCurrency(kpis.stockValue) : '—'}
-            icon="cube-outline"
-            color="#f59e0b"
-            loading={loading}
-          />
-          <KPICard
-            title="Receivables"
-            value={kpis ? fmtCurrency(kpis.totalReceivables) : '—'}
-            icon="wallet-outline"
-            color="#dc2626"
-            loading={loading}
-          />
-          <KPICard
-            title="Collection"
-            value={kpis ? `${kpis.collectionRate.toFixed(1)}%` : '—'}
-            icon="checkmark-circle-outline"
-            color="#16a34a"
-            loading={loading}
-            isPositive={kpis ? kpis.collectionRate >= 70 : true}
-          />
-        </View>
-      </View>
-
-      {/* ── Credit Health ── */}
-      <View style={st.section}>
-        <Text style={st.sectionTitle}>Credit Health</Text>
-        <View style={[st.card, Shadow.sm]}>
-          <CreditMetricRow
-            label="Collection Rate"
-            value={kpis?.collectionRate ?? 0}
-            unit="%"
-            good={safeNum(kpis?.collectionRate) >= 70}
-            loading={loading}
-          />
-          <CreditMetricRow
-            label="Overdue Rate"
-            value={kpis?.overdueRate ?? 0}
-            unit="%"
-            good={safeNum(kpis?.overdueRate) <= 20}
-            loading={loading}
-          />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10 }}>
-            <Text style={{ fontSize: 13, color: Colors.gray600 }}>DSO (avg payment days)</Text>
-            {loading ? (
-              <View style={[st.skeleton, { width: 60, height: 14 }]} />
-            ) : (
-              <Text style={{ fontSize: 14, fontWeight: '700', color: safeNum(kpis?.dso) <= 90 ? '#16a34a' : '#f59e0b' }}>
-                {safeNum(kpis?.dso).toFixed(0)} days
-              </Text>
-            )}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(true); }} tintColor={Colors.blue} />
+        }
+      >
+        {/* Error */}
+        {error && (
+          <View style={S.errorBanner}>
+            <Ionicons name="alert-circle-outline" size={14} color={Colors.red} />
+            <Text style={{ flex:1, fontSize:12, color:Colors.red }}>{error}</Text>
+            <TouchableOpacity onPress={() => fetchAll()}>
+              <Text style={{ fontSize:12, fontWeight:'700', color:Colors.red }}>Retry</Text>
+            </TouchableOpacity>
           </View>
-        </View>
-      </View>
-
-      {/* ── Global Risk Gauge ── */}
-      <View style={{ paddingHorizontal: Spacing.base }}>
-        <RiskGauge criticalCount={criticalCount} totalCount={topRisk.length} />
-      </View>
-
-      {/* ── Top Risky Customers ── */}
-      <View style={st.section}>
-        <View style={st.sectionHdr}>
-          <Text style={st.sectionTitle}>Top Risky Customers</Text>
-          <TouchableOpacity onPress={() => navigation?.navigate?.('Control')}>
-            <Text style={st.seeAll}>See all →</Text>
-          </TouchableOpacity>
-        </View>
-
-        {loading ? (
-          <View style={[st.card, Shadow.sm, { padding: 32, alignItems: 'center' }]}>
-            <ActivityIndicator color={Colors.indigo600} />
-            <Text style={{ fontSize: 13, color: Colors.gray500, marginTop: 10 }}>Loading customers…</Text>
-          </View>
-        ) : topRisk.length === 0 ? (
-          <View style={[st.card, Shadow.sm, { padding: 32, alignItems: 'center' }]}>
-            <Ionicons name="checkmark-circle-outline" size={32} color="#16a34a" />
-            <Text style={{ fontSize: 14, color: Colors.gray500, marginTop: 8 }}>No risky customers</Text>
-          </View>
-        ) : (
-          topRisk.map(item => (
-            <RiskCustomerRow
-              key={item.id}
-              item={item}
-              onPress={() => navigation?.navigate?.('Control', { tab: 'aging', customerId: item.id })}
-            />
-          ))
         )}
-      </View>
 
-      {/* ── Monthly Quick Summary ── */}
-      {monthly.length > 0 && (
-        <View style={st.section}>
-          <Text style={st.sectionTitle}>Monthly Trend</Text>
-          <View style={[st.card, Shadow.sm]}>
-            {[...monthly]
-              .sort((a, b) => a.year * 100 + a.month - (b.year * 100 + b.month))
-              .slice(-4)
-              .map((m, i) => {
-                const maxSales = Math.max(...monthly.map(x => x.total_sales), 1);
-                const pct = (m.total_sales / maxSales) * 100;
-                return (
-                  <View key={i} style={{ marginBottom: i < 3 ? 12 : 0 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <Text style={{ fontSize: 12, color: Colors.gray500 }}>
-                        {m.month_label} {m.year}
-                      </Text>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.foreground }}>
-                        {fmtCurrency(m.total_sales)}
-                      </Text>
-                    </View>
-                    <View style={{ height: 5, borderRadius: 3, backgroundColor: Colors.gray100, overflow: 'hidden' }}>
-                      <LinearGradient
-                        colors={[Colors.indigo600 + '80', Colors.indigo600]}
-                        style={{ width: `${pct}%` as any, height: 5, borderRadius: 3 }}
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                      />
-                    </View>
-                  </View>
-                );
-              })}
+        {/* KPI Grid */}
+        <View style={S.section}>
+          <SectionHeader title="Key Metrics" />
+          <View style={S.kpiGrid}>
+            <KpiCard title="Total Sales"  value={kpis ? fmtCurrency(kpis.totalSales) : '—'}       trend={salesTrend} isPositive={(salesTrend??0)>=0} icon="trending-up-outline"      accentColor={Colors.blue}   sparkPts={sp1} loading={loading} />
+            <KpiCard title="Stock Value"  value={kpis ? fmtCurrency(kpis.stockValue) : '—'}       icon="cube-outline"            accentColor={Colors.orange} sparkPts={sp2} loading={loading} />
+            <KpiCard title="Receivables" value={kpis ? fmtCurrency(kpis.totalReceivables) : '—'} icon="wallet-outline"          accentColor={Colors.red}    sparkPts={sp3} loading={loading} />
+            <KpiCard title="Collection"  value={kpis ? `${safe(kpis.collectionRate).toFixed(1)}%` : '—'} icon="checkmark-circle-outline" accentColor={Colors.teal} sparkPts={sp4} isPositive={safe(kpis?.collectionRate)>=70} loading={loading} />
           </View>
         </View>
-      )}
 
-      <View style={{ height: 32 }} />
-    </ScrollView>
+        {/* Monthly Trend */}
+        {monthly.length > 0 && (
+          <View style={[S.section, { paddingTop:0 }]}>
+            <MonthlyBars data={monthly} />
+          </View>
+        )}
+
+        {/* Credit Health */}
+        <View style={[S.section, { paddingTop:0 }]}>
+          <SectionHeader title="Credit Health" />
+          <View style={[S.card, Shadow.sm]}>
+            <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+              <Text style={{ fontSize:13, fontWeight:'700', color:Colors.text }}>Global Risk Level</Text>
+              <RiskPill risk={safe(kpis?.overdueRate) > 25 ? 'critical' : safe(kpis?.overdueRate) > 15 ? 'high' : 'low'} />
+            </View>
+            <View style={{ height:10, borderRadius:5, overflow:'hidden', marginBottom:5 }}>
+              <LinearGradient colors={[Colors.green, Colors.amber, Colors.red]} style={{ flex:1, borderRadius:5 }} start={{ x:0,y:0 }} end={{ x:1,y:0 }} />
+            </View>
+            <View style={{ height:18, position:'relative', marginBottom:8 }}>
+              <View style={{
+                position:'absolute',
+                left:`${Math.min(90, Math.max(5, safe(kpis?.overdueRate)))}%` as any,
+                top:0,
+                width:16, height:16, borderRadius:8,
+                backgroundColor:Colors.surface,
+                borderWidth:2.5, borderColor:Colors.text,
+                marginLeft:-8,
+                ...Shadow.sm,
+              }} />
+            </View>
+            <View style={{ flexDirection:'row', justifyContent:'space-between', marginBottom:14 }}>
+              <Text style={{ fontSize:10, fontWeight:'600', color:Colors.green }}>Low</Text>
+              <Text style={{ fontSize:10, fontWeight:'600', color:Colors.amber }}>Medium</Text>
+              <Text style={{ fontSize:10, fontWeight:'600', color:Colors.red }}>High</Text>
+            </View>
+            {[
+              { label:'Collection Rate', value:`${safe(kpis?.collectionRate).toFixed(1)}%`, good: safe(kpis?.collectionRate) >= 70 },
+              { label:'Overdue Rate',    value:`${safe(kpis?.overdueRate).toFixed(1)}%`,    good: safe(kpis?.overdueRate) <= 20 },
+              { label:'DSO (avg days)',  value:`${safe(kpis?.dso).toFixed(0)} days`,         good: safe(kpis?.dso) <= 90 },
+            ].map(({ label, value, good }, i) => (
+              <View key={i} style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', paddingVertical:10, borderTopWidth: i===0 ? 1 : 0, borderTopColor:Colors.border }}>
+                <Text style={{ fontSize:12.5, color:Colors.text2 }}>{label}</Text>
+                {loading
+                  ? <View style={[S.skeleton, { width:60, height:14 }]} />
+                  : (
+                    <View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
+                      <Text style={{ fontSize:13, fontWeight:'700', color: good ? Colors.green : Colors.red }}>{value}</Text>
+                      <View style={{ paddingHorizontal:7, paddingVertical:2, borderRadius:BorderRadius.full, backgroundColor: good ? Colors.greenBg : Colors.redBg }}>
+                        <Text style={{ fontSize:9, fontWeight:'800', color: good ? Colors.greenText as any : Colors.redText as any }}>{good ? 'GOOD' : 'ALERT'}</Text>
+                      </View>
+                    </View>
+                  )}
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Top Risky Customers */}
+        <View style={[S.section, { paddingTop:0 }]}>
+          <SectionHeader
+            title="Top Risky Customers"
+            action="Aging →"
+            onAction={() => navigation?.navigate?.('Control', { tab:'aging' })}
+          />
+          {loading
+            ? <ActivityIndicator color={Colors.blue} style={{ marginTop:20 }} />
+            : filteredRisk.length === 0
+              ? <EmptyState icon="checkmark-circle-outline" title="No risky customers" subtitle={hasActive ? 'Try adjusting your filters' : 'All customers are in good standing'} />
+              : filteredRisk.map(item => (
+                <RiskRow
+                  key={item.id}
+                  item={item}
+                  onPress={() => navigation?.navigate?.('Control', { tab:'aging' })}
+                />
+              ))
+          }
+        </View>
+
+        <View style={{ height:24 }} />
+      </ScrollView>
+
+      {/* Filter Sheet */}
+      <FilterSheet
+        visible={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        groups={[
+          {
+            key:     'risk',
+            label:   'Risk Level',
+            // Sent to GET /api/aging/risk/?risk=X
+            options: ['all','critical','high','medium','low'],
+          },
+          {
+            key:     'branch',
+            label:   'Branch',
+            // Client-side filter on returned results (branch resolved by backend)
+            options: ['all', ...availableBranches],
+          },
+        ]}
+        values={filters}
+        onChange={(key, val) => setFilters(prev => ({ ...prev, [key]:val }))}
+        onReset={() => {
+          const newF = { risk:'all', branch:'all' };
+          setFilters(newF);
+          setFilterOpen(false);
+          fetchAll(false, newF);
+        }}
+        onApply={() => {
+          setFilterOpen(false);
+          fetchAll(false, filters);
+        }}
+      />
+    </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const st = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: Colors.gray50 },
-  headerGrad:   { padding: 20, paddingTop: 28, paddingBottom: 28, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle:  { fontSize: 24, fontWeight: '800', color: '#fff' },
-  headerSub:    { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
-  headerRiskBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  riskDot:      { width: 8, height: 8, borderRadius: 4 },
-  riskTxt:      { fontSize: 12, fontWeight: '700', color: '#fff' },
-  riskGauge:    { backgroundColor: Colors.white, borderRadius: BorderRadius.xl, padding: 16, marginBottom: 4, borderWidth: 1, borderColor: Colors.gray100 },
-  section:      { padding: Spacing.base, paddingBottom: 0 },
-  sectionHdr:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 17, fontWeight: '800', color: Colors.foreground, marginBottom: 12 },
-  seeAll:       { fontSize: 13, color: Colors.indigo600, fontWeight: '600' },
-  card:         { backgroundColor: Colors.white, borderRadius: BorderRadius.xl, padding: 16, borderWidth: 1, borderColor: Colors.gray100 },
-  kpiGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  kpiCard:      { width: CARD_W, backgroundColor: Colors.white, borderRadius: BorderRadius.xl, padding: 14, borderWidth: 1, borderColor: Colors.gray100 },
-  kpiTop:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  kpiIcon:      { width: 36, height: 36, borderRadius: BorderRadius.lg, alignItems: 'center', justifyContent: 'center' },
-  kpiTrend:     { fontSize: 12, fontWeight: '700' },
-  kpiLabel:     { fontSize: 11, color: Colors.gray500, marginBottom: 2 },
-  kpiValue:     { fontSize: 17, fontWeight: '800', color: Colors.foreground },
-  riskRow:      { backgroundColor: Colors.white, borderRadius: BorderRadius.xl, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: Colors.gray100 },
-  riskTop:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  riskName:     { fontSize: 14, fontWeight: '700', color: Colors.foreground },
-  riskBadge:    { paddingHorizontal: 8, paddingVertical: 3, borderRadius: BorderRadius.full },
-  riskBadgeTxt: { fontSize: 9, fontWeight: '800', color: '#fff' },
-  errorBanner:  { flexDirection: 'row', alignItems: 'center', gap: 8, margin: Spacing.base, padding: 12, borderRadius: BorderRadius.lg, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fecaca' },
-  errorTxt:     { flex: 1, fontSize: 12, color: '#dc2626' },
-  retryBtn:     { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#dc2626' },
-  retryTxt:     { fontSize: 12, fontWeight: '700', color: '#fff' },
-  skeleton:     { backgroundColor: Colors.gray100, borderRadius: 4 },
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const S = StyleSheet.create({
+  header:       { padding:20, paddingBottom:16 },
+  headerTop:    { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:12 },
+  headerLogo:   { fontSize:20, fontWeight:'700', color:'#fff', letterSpacing:-0.5 },
+  headerGreeting: { fontSize:22, fontWeight:'700', color:'#fff', letterSpacing:-0.5, lineHeight:30 },
+  headerSub:    { fontSize:11.5, color:'rgba(255,255,255,0.5)', marginTop:3 },
+  iconBtn:      { width:34, height:34, borderRadius:BorderRadius.lg, backgroundColor:'rgba(255,255,255,0.1)', alignItems:'center', justifyContent:'center', position:'relative' },
+  notifDot:     { position:'absolute', top:6, right:6, width:7, height:7, borderRadius:4, backgroundColor:Colors.orange, borderWidth:1.5, borderColor:Colors.navy2 },
+  section:      { padding:16 },
+  kpiGrid:      { flexDirection:'row', flexWrap:'wrap', gap:10 },
+  kpiCard:      { width:CARD_W, backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:14, borderWidth:1, borderColor:Colors.border, overflow:'hidden' },
+  kpiAccent:    { position:'absolute', top:0, left:0, right:0, height:3 },
+  kpiIcon:      { width:32, height:32, borderRadius:BorderRadius.lg, alignItems:'center', justifyContent:'center', marginBottom:10 },
+  kpiLabel:     { fontSize:10.5, fontWeight:'600', color:Colors.text3, letterSpacing:0.2, marginBottom:3 },
+  kpiValue:     { fontSize:20, fontWeight:'700', color:Colors.text, letterSpacing:-0.5, lineHeight:24 },
+  chartCard:    { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:16, borderWidth:1, borderColor:Colors.border, ...Shadow.sm },
+  card:         { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:16, borderWidth:1, borderColor:Colors.border },
+  riskRow:      { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:14, marginBottom:10, borderWidth:1, borderColor:Colors.border },
+  riskName:     { fontSize:13, fontWeight:'700', color:Colors.text },
+  errorBanner:  { flexDirection:'row', alignItems:'center', gap:8, margin:16, padding:12, borderRadius:BorderRadius.lg, backgroundColor:Colors.redBg, borderWidth:1, borderColor:'#fecaca' },
+  skeleton:     { backgroundColor:Colors.bg, borderRadius:4 },
 });
