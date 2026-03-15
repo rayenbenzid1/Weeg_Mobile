@@ -1,13 +1,14 @@
 /**
  * DashboardScreen.tsx — WEEG Mobile v2
  * ─────────────────────────────────────────────────────────────────────────────
+ * The old inline gradient header (WEEG logo + greeting + icons) has been
+ * REMOVED.  The shared <AppHeader /> injected by MainNavigator/withHeader()
+ * now handles branding, greeting, notification bell, and profile avatar.
+ *
  * Filters on risky customers:
- *   risk  → GET /api/aging/risk/?risk=X          (server-side)
- *   branch → no direct aging branch param → cross-ref via GET /api/aging/risk/
- *            The backend AgingRiskView returns branch via _resolve_branch()
- *            which cross-references sales transactions.
- *            We filter by branch client-side on the returned results
- *            (same approach as AgingPage.tsx).
+ *   risk   → GET /api/aging/risk/?risk=X          (server-side)
+ *   branch → client-side filter on returned results
+ *            (branch resolved by backend via _resolve_branch())
  *
  * KPIs come from:
  *   GET /api/kpi/sales/   → totalSales, salesEvolution
@@ -21,7 +22,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Shadow, BorderRadius, getRiskColor } from '../../constants/theme';
 import {
   RiskPill, BranchTag, SectionHeader, SummaryStrip,
@@ -181,7 +181,6 @@ function MonthlyBars({ data }: { data: MonthlySummaryItem[] }) {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export function DashboardScreen({ navigation }: any) {
-  const insets = useSafeAreaInsets();
   const [kpis,       setKpis]       = useState<DashboardKPIs|null>(null);
   const [monthly,    setMonthly]    = useState<MonthlySummaryItem[]>([]);
   const [topRisk,    setTopRisk]    = useState<AgingRiskItem[]>([]);
@@ -189,7 +188,6 @@ export function DashboardScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [error,      setError]      = useState<string|null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
-  // Filters — risk sent to /api/aging/risk/?risk=X; branch is client-side on returned results
   const [filters,    setFilters]    = useState({ risk:'all', branch:'all' });
   const [availableBranches, setAvailableBranches] = useState<string[]>([]);
 
@@ -197,7 +195,6 @@ export function DashboardScreen({ navigation }: any) {
     if (!isRefresh) setLoading(true);
     setError(null);
     try {
-      // Risk filter sent to backend; branch is resolved by backend via _resolve_branch()
       const riskParam = f.risk !== 'all' ? f.risk : undefined;
       const [kpisRes, monthlyRes, riskRes] = await Promise.allSettled([
         DashboardService.getDashboardKPIs(),
@@ -218,15 +215,12 @@ export function DashboardScreen({ navigation }: any) {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Load branch options for filter
   useEffect(() => {
     TransactionMobileService.getBranches()
       .then(r => setAvailableBranches(r.branches ?? []))
       .catch(() => {});
   }, []);
 
-  // Branch filter: client-side on topRisk results
-  // (branch is resolved by backend via _resolve_branch() from sales transactions)
   const filteredRisk = filters.branch !== 'all'
     ? topRisk.filter(r => r.branch === filters.branch)
     : topRisk;
@@ -247,33 +241,7 @@ export function DashboardScreen({ navigation }: any) {
 
   return (
     <View style={{ flex:1, backgroundColor:Colors.bg }}>
-      {/* Header */}
-      <LinearGradient
-        colors={[Colors.navy2, Colors.navy3]}
-        style={[S.header, { paddingTop: insets.top + 8 }]}
-        start={{ x:0,y:0 }} end={{ x:1,y:1 }}
-      >
-        <View style={S.headerTop}>
-          <Text style={S.headerLogo}>W<Text style={{ color:Colors.orange }}>EEG</Text></Text>
-          <View style={{ flexDirection:'row', gap:8, alignItems:'center' }}>
-            <TouchableOpacity
-              style={[S.iconBtn, hasActive && { backgroundColor:'rgba(26,92,240,0.4)' }]}
-              onPress={() => setFilterOpen(true)}
-            >
-              <Ionicons name="options-outline" size={18} color="rgba(255,255,255,0.85)" />
-              {hasActive && <View style={S.notifDot} />}
-            </TouchableOpacity>
-            <TouchableOpacity style={S.iconBtn}>
-              <Ionicons name="notifications-outline" size={18} color="rgba(255,255,255,0.85)" />
-              <View style={S.notifDot} />
-            </TouchableOpacity>
-          </View>
-        </View>
-        <Text style={S.headerGreeting}>Good morning 👋</Text>
-        <Text style={S.headerSub}>Sunday, March 15 · Dashboard overview</Text>
-      </LinearGradient>
-
-      {/* Active filter chips */}
+      {/* ── Filter button (floating, just below header) ── */}
       {hasActive && (
         <View style={{ backgroundColor:Colors.surface, borderBottomWidth:1, borderBottomColor:Colors.border, paddingVertical:8 }}>
           <ActiveFilterChips
@@ -288,10 +256,25 @@ export function DashboardScreen({ navigation }: any) {
         </View>
       )}
 
+      {/* ── Filter trigger row ── */}
+      <View style={{ paddingHorizontal:16, paddingTop:12, paddingBottom:4, flexDirection:'row', justifyContent:'flex-end' }}>
+        <TouchableOpacity
+          style={[S.filterBtn, hasActive && S.filterBtnActive]}
+          onPress={() => setFilterOpen(true)}
+        >
+          <Ionicons name="options-outline" size={16} color={hasActive ? '#fff' : Colors.text3} />
+          {hasActive && <View style={S.filterDot} />}
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(true); }} tintColor={Colors.blue} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); fetchAll(true); }}
+            tintColor={Colors.blue}
+          />
         }
       >
         {/* Error */}
@@ -402,18 +385,8 @@ export function DashboardScreen({ navigation }: any) {
         visible={filterOpen}
         onClose={() => setFilterOpen(false)}
         groups={[
-          {
-            key:     'risk',
-            label:   'Risk Level',
-            // Sent to GET /api/aging/risk/?risk=X
-            options: ['all','critical','high','medium','low'],
-          },
-          {
-            key:     'branch',
-            label:   'Branch',
-            // Client-side filter on returned results (branch resolved by backend)
-            options: ['all', ...availableBranches],
-          },
+          { key:'risk',   label:'Risk Level', options:['all','critical','high','medium','low'] },
+          { key:'branch', label:'Branch',     options:['all', ...availableBranches] },
         ]}
         values={filters}
         onChange={(key, val) => setFilters(prev => ({ ...prev, [key]:val }))}
@@ -434,24 +407,20 @@ export function DashboardScreen({ navigation }: any) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
-  header:       { padding:20, paddingBottom:16 },
-  headerTop:    { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:12 },
-  headerLogo:   { fontSize:20, fontWeight:'700', color:'#fff', letterSpacing:-0.5 },
-  headerGreeting: { fontSize:22, fontWeight:'700', color:'#fff', letterSpacing:-0.5, lineHeight:30 },
-  headerSub:    { fontSize:11.5, color:'rgba(255,255,255,0.5)', marginTop:3 },
-  iconBtn:      { width:34, height:34, borderRadius:BorderRadius.lg, backgroundColor:'rgba(255,255,255,0.1)', alignItems:'center', justifyContent:'center', position:'relative' },
-  notifDot:     { position:'absolute', top:6, right:6, width:7, height:7, borderRadius:4, backgroundColor:Colors.orange, borderWidth:1.5, borderColor:Colors.navy2 },
-  section:      { padding:16 },
-  kpiGrid:      { flexDirection:'row', flexWrap:'wrap', gap:10 },
-  kpiCard:      { width:CARD_W, backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:14, borderWidth:1, borderColor:Colors.border, overflow:'hidden' },
-  kpiAccent:    { position:'absolute', top:0, left:0, right:0, height:3 },
-  kpiIcon:      { width:32, height:32, borderRadius:BorderRadius.lg, alignItems:'center', justifyContent:'center', marginBottom:10 },
-  kpiLabel:     { fontSize:10.5, fontWeight:'600', color:Colors.text3, letterSpacing:0.2, marginBottom:3 },
-  kpiValue:     { fontSize:20, fontWeight:'700', color:Colors.text, letterSpacing:-0.5, lineHeight:24 },
-  chartCard:    { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:16, borderWidth:1, borderColor:Colors.border, ...Shadow.sm },
-  card:         { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:16, borderWidth:1, borderColor:Colors.border },
-  riskRow:      { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:14, marginBottom:10, borderWidth:1, borderColor:Colors.border },
-  riskName:     { fontSize:13, fontWeight:'700', color:Colors.text },
-  errorBanner:  { flexDirection:'row', alignItems:'center', gap:8, margin:16, padding:12, borderRadius:BorderRadius.lg, backgroundColor:Colors.redBg, borderWidth:1, borderColor:'#fecaca' },
-  skeleton:     { backgroundColor:Colors.bg, borderRadius:4 },
+  section:       { padding:16 },
+  kpiGrid:       { flexDirection:'row', flexWrap:'wrap', gap:10 },
+  kpiCard:       { width:CARD_W, backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:14, borderWidth:1, borderColor:Colors.border, overflow:'hidden' },
+  kpiAccent:     { position:'absolute', top:0, left:0, right:0, height:3 },
+  kpiIcon:       { width:32, height:32, borderRadius:BorderRadius.lg, alignItems:'center', justifyContent:'center', marginBottom:10 },
+  kpiLabel:      { fontSize:10.5, fontWeight:'600', color:Colors.text3, letterSpacing:0.2, marginBottom:3 },
+  kpiValue:      { fontSize:20, fontWeight:'700', color:Colors.text, letterSpacing:-0.5, lineHeight:24 },
+  chartCard:     { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:16, borderWidth:1, borderColor:Colors.border, ...Shadow.sm },
+  card:          { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:16, borderWidth:1, borderColor:Colors.border },
+  riskRow:       { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:14, marginBottom:10, borderWidth:1, borderColor:Colors.border },
+  riskName:      { fontSize:13, fontWeight:'700', color:Colors.text },
+  errorBanner:   { flexDirection:'row', alignItems:'center', gap:8, margin:16, padding:12, borderRadius:BorderRadius.lg, backgroundColor:Colors.redBg, borderWidth:1, borderColor:'#fecaca' },
+  skeleton:      { backgroundColor:Colors.bg, borderRadius:4 },
+  filterBtn:     { width:38, height:38, borderRadius:BorderRadius.lg, backgroundColor:Colors.surface, borderWidth:1, borderColor:Colors.border, alignItems:'center', justifyContent:'center', position:'relative' },
+  filterBtnActive:{ backgroundColor:Colors.blue, borderColor:Colors.blue },
+  filterDot:     { position:'absolute', top:6, right:6, width:7, height:7, borderRadius:4, backgroundColor:Colors.orange, borderWidth:1.5, borderColor:Colors.blue },
 });

@@ -2,15 +2,17 @@
  * MainNavigator.tsx — Navigation par rôle
  *
  * ADMIN   : Admin · Profile · Settings
- * MANAGER : Home · Alerts · Control · Team · Profile · Settings
- * AGENT   : Home · Alerts · Control · Profile · Settings
+ * MANAGER : Home · Control · Team · Profile · Settings
+ * AGENT   : Home · Control · Profile · Settings
+ *
+ * The old per-screen Header (logo + search + notifications + profile row)
+ * has been REMOVED.  It is replaced by the new shared <AppHeader /> which
+ * is injected via withHeader() below.
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Modal, Image } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React from 'react';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 
 import { DashboardScreen }      from '../screens/dashboard/DashboardScreen';
@@ -20,248 +22,160 @@ import { ManagerAgentsScreen }  from '../screens/manager/ManagerAgentsScreen';
 import { ProfileScreen }        from '../screens/profile/ProfileScreen';
 import { SettingsScreen }       from '../screens/settings/SettingsScreen';
 
-import { Colors, BorderRadius } from '../constants/theme';
-import { useAuth } from '../contexts/AuthContext';
+import { AppHeader } from '../components/AppHeader';
+import { Colors }    from '../constants/theme';
+import { useAuth }   from '../contexts/AuthContext';
 
 const Tab = createBottomTabNavigator();
-const WEEG_NAVY   = '#0d1b2e';
-const WEEG_BLUE   = '#1a6fe8';
-const WEEG_ORANGE = '#e87c1a';
+const WEEG_BLUE = '#1a6fe8';
 
-// ─── Search Modal ──────────────────────────────────────────────────────────────
-
-function SearchModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const [q, setQ] = useState('');
-  const suggestions = ['MacBook Pro', 'iPhone 15 Pro', 'Samsung Galaxy', 'AirPods Pro', 'Invoice #247'];
-  const filtered = q ? suggestions.filter(s => s.toLowerCase().includes(q.toLowerCase())) : suggestions;
-
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: Colors.white }}>
-        <View style={h.searchModalBar}>
-          <Ionicons name="search" size={18} color={Colors.gray400} />
-          <TextInput
-            autoFocus value={q} onChangeText={setQ}
-            placeholder="Search products, customers, invoices..."
-            placeholderTextColor={Colors.gray400}
-            style={{ flex: 1, fontSize: 15, color: Colors.foreground }}
-          />
-          <TouchableOpacity onPress={() => { setQ(''); onClose(); }}>
-            <Text style={{ fontSize: 14, color: WEEG_BLUE, fontWeight: '600' }}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={{ padding: 16 }}>
-          <Text style={{ fontSize: 12, color: Colors.gray500, marginBottom: 10, fontWeight: '600' }}>
-            {q ? 'Results' : 'Recent Searches'}
-          </Text>
-          {filtered.map((s, i) => (
-            <TouchableOpacity key={i} style={h.searchItem}>
-              <Ionicons name="search-outline" size={15} color={Colors.gray400} />
-              <Text style={{ fontSize: 14, color: Colors.foreground }}>{s}</Text>
-            </TouchableOpacity>
-          ))}
-          {filtered.length === 0 && (
-            <Text style={{ fontSize: 13, color: Colors.gray400, textAlign: 'center', marginTop: 24 }}>
-              No results for "{q}"
-            </Text>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-// ─── Header ────────────────────────────────────────────────────────────────────
-
-function Header({ navigation, pendingAlertsCount = 0 }: { navigation?: any; pendingAlertsCount?: number }) {
-  const { user } = useAuth();
-  const [searchOpen, setSearchOpen] = useState(false);
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View style={[h.header, { paddingTop: insets.top + 8 }]}>
-      <SearchModal visible={searchOpen} onClose={() => setSearchOpen(false)} />
-      <View style={h.left}>
-        <Image source={require('../assets/logo.jpeg')} style={h.logoImg} resizeMode="contain" />
-      </View>
-      <View style={h.right}>
-        <TouchableOpacity style={h.iconBtn} onPress={() => setSearchOpen(true)}>
-          <Ionicons name="search-outline" size={20} color={Colors.gray500} />
-        </TouchableOpacity>
-        <TouchableOpacity style={h.iconBtn} onPress={() => navigation?.navigate('Alerts')}>
-          <Ionicons name="notifications-outline" size={20} color={Colors.gray500} />
-          {pendingAlertsCount > 0 && (
-            <View style={h.badge}>
-              <Text style={h.badgeTxt}>{pendingAlertsCount > 9 ? '9+' : pendingAlertsCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        <TouchableOpacity style={h.userRow} onPress={() => navigation?.navigate('Profile')}>
-          <LinearGradient colors={[WEEG_NAVY, WEEG_BLUE, WEEG_ORANGE]} style={h.avatar} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-            <Text style={h.avatarTxt}>{(user?.name || 'U').charAt(0).toUpperCase()}</Text>
-          </LinearGradient>
-          <View>
-            <Text style={h.userName} numberOfLines={1}>{user?.name || 'User'}</Text>
-            <Text style={h.userRole}>{user?.role || 'user'}</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-const h = StyleSheet.create({
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingBottom: 10,
-    backgroundColor: Colors.white,
-    borderBottomWidth: 1, borderBottomColor: Colors.gray100,
-  },
-  left:    { flexDirection: 'row', alignItems: 'center' },
-  logoImg: { width: 100, height: 36 },
-  right:   { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  iconBtn: { padding: 6, position: 'relative' },
-  badge:   { position: 'absolute', top: 2, right: 2, minWidth: 14, height: 14, borderRadius: 7, backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
-  badgeTxt:{ fontSize: 8, color: '#fff', fontWeight: '800' },
-  userRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 4 },
-  avatar:  { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  avatarTxt: { fontSize: 12, fontWeight: '800', color: '#fff' },
-  userName:  { fontSize: 11, fontWeight: '700', color: Colors.foreground, maxWidth: 70 },
-  userRole:  { fontSize: 9, color: Colors.gray500, textTransform: 'capitalize' },
-  searchModalBar: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, paddingTop: 20, borderBottomWidth: 1, borderBottomColor: Colors.gray100 },
-  searchItem:     { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.gray50 },
-});
-
-// ─── Hook alertes ──────────────────────────────────────────────────────────────
-
+// ─── Pending alerts hook ───────────────────────────────────────────────────────
+// TODO: replace with real fetch when /alerts/pending-count/ endpoint is ready
 function usePendingAlerts() {
   const [count] = React.useState(0);
-  // TODO: fetch('/alerts/pending-count/') quand endpoint prêt
   return { pendingAlertsCount: count };
 }
 
-// ─── Wrapper avec Header ───────────────────────────────────────────────────────
+// ─── Page title map ────────────────────────────────────────────────────────────
+const PAGE_TITLES: Record<string, string> = {
+  Home:     'Dashboard',
+  Control:  'Control Panel',
+  Admin:    'User Management',
+  Team:     'My Team',
+  Profile:  'Profile',
+  Settings: 'Settings',
+};
 
-function withHeader(Screen: React.ComponentType<any>) {
+// ─── withHeader HOC ───────────────────────────────────────────────────────────
+// Wraps a screen with the shared AppHeader.
+// The page title is derived from the current route name.
+
+function withHeader(Screen: React.ComponentType<any>, routeName: string) {
   return function WrappedScreen(props: any) {
     const { pendingAlertsCount } = usePendingAlerts();
+    const title = PAGE_TITLES[routeName] ?? routeName;
+
     return (
       <View style={{ flex: 1 }}>
-        <Header navigation={props.navigation} pendingAlertsCount={pendingAlertsCount} />
+        <AppHeader
+          title={title}
+          pendingAlertsCount={pendingAlertsCount}
+          onNotificationPress={() => props.navigation?.navigate?.('Alerts')}
+          onProfilePress={() => props.navigation?.navigate?.('Profile')}
+        />
         <Screen {...props} />
       </View>
     );
   };
 }
 
-// Wrappers
-const HomeWrapped          = withHeader(DashboardScreen);
-const ControlWrapped       = withHeader(ControlScreen);
-const AdminWrapped         = withHeader(AdminScreen);
-const ManagerAgentsWrapped = withHeader(ManagerAgentsScreen);
-const ProfileWrapped       = withHeader(ProfileScreen);
-const SettingsWrapped      = withHeader(SettingsScreen);
+// ─── Wrapped screens ───────────────────────────────────────────────────────────
+const HomeWrapped          = withHeader(DashboardScreen,     'Home');
+const ControlWrapped       = withHeader(ControlScreen,       'Control');
+const AdminWrapped         = withHeader(AdminScreen,         'Admin');
+const ManagerAgentsWrapped = withHeader(ManagerAgentsScreen, 'Team');
+const ProfileWrapped       = withHeader(ProfileScreen,       'Profile');
+const SettingsWrapped      = withHeader(SettingsScreen,      'Settings');
 
-// ─── Tab styles communs ────────────────────────────────────────────────────────
-
+// ─── Shared tab bar style ──────────────────────────────────────────────────────
 const tabBarStyle = {
   backgroundColor: Colors.white,
-  borderTopColor: Colors.gray100,
-  borderTopWidth: 1,
-  paddingTop: 6,
-  paddingBottom: 8,
-  height: 65,
-  elevation: 8,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: -2 },
-  shadowOpacity: 0.06,
-  shadowRadius: 8,
+  borderTopColor:  Colors.gray100,
+  borderTopWidth:  1,
+  paddingTop:      6,
+  paddingBottom:   8,
+  height:          65,
+  elevation:       8,
+  shadowColor:     '#000',
+  shadowOffset:    { width: 0, height: -2 },
+  shadowOpacity:   0.06,
+  shadowRadius:    8,
 };
 
 const navigatorScreenOptions = {
-  headerShown: false,
+  headerShown:          false,
   tabBarStyle,
-  tabBarActiveTintColor: WEEG_BLUE,
+  tabBarActiveTintColor:   WEEG_BLUE,
   tabBarInactiveTintColor: Colors.gray400,
   tabBarLabelStyle: { fontSize: 10, fontWeight: '600' as const, marginTop: 2 },
 };
 
-// ─── Tab options ───────────────────────────────────────────────────────────────
-
+// ─── Tab icon/label options ────────────────────────────────────────────────────
 const tabOptions = {
   Home: {
     tabBarLabel: 'Home',
-    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />,
+    tabBarIcon: ({ focused, color }: any) => (
+      <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
+    ),
   },
-  Alerts: (badge: number) => ({
-    tabBarLabel: 'Alerts',
-    tabBarBadge: badge > 0 ? badge : undefined,
-    tabBarBadgeStyle: { backgroundColor: '#dc2626', fontSize: 9, minWidth: 16, height: 16 },
-    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'warning' : 'warning-outline'} size={22} color={color} />,
-  }),
   Control: {
     tabBarLabel: 'Control',
-    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'pulse' : 'pulse-outline'} size={22} color={color} />,
+    tabBarIcon: ({ focused, color }: any) => (
+      <Ionicons name={focused ? 'pulse' : 'pulse-outline'} size={22} color={color} />
+    ),
   },
   Admin: {
     tabBarLabel: 'Admin',
-    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'shield-checkmark' : 'shield-checkmark-outline'} size={22} color={color} />,
+    tabBarIcon: ({ focused, color }: any) => (
+      <Ionicons name={focused ? 'shield-checkmark' : 'shield-checkmark-outline'} size={22} color={color} />
+    ),
   },
-  // ← Nouveau tab Team pour les managers
   Team: {
     tabBarLabel: 'Team',
-    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'people' : 'people-outline'} size={22} color={color} />,
+    tabBarIcon: ({ focused, color }: any) => (
+      <Ionicons name={focused ? 'people' : 'people-outline'} size={22} color={color} />
+    ),
   },
   Profile: {
     tabBarLabel: 'Profile',
-    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />,
+    tabBarIcon: ({ focused, color }: any) => (
+      <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
+    ),
   },
   Settings: {
     tabBarLabel: 'Settings',
-    tabBarIcon: ({ focused, color }: any) => <Ionicons name={focused ? 'settings' : 'settings-outline'} size={22} color={color} />,
+    tabBarIcon: ({ focused, color }: any) => (
+      <Ionicons name={focused ? 'settings' : 'settings-outline'} size={22} color={color} />
+    ),
   },
 };
 
-// ─── Navigators par rôle ───────────────────────────────────────────────────────
+// ─── Role navigators ───────────────────────────────────────────────────────────
 
 function AdminNavigator() {
   return (
     <Tab.Navigator screenOptions={navigatorScreenOptions}>
-      <Tab.Screen name="Admin"    component={AdminWrapped}    options={tabOptions.Admin} />
-      <Tab.Screen name="Profile"  component={ProfileWrapped}  options={tabOptions.Profile} />
+      <Tab.Screen name="Admin"    component={AdminWrapped}    options={tabOptions.Admin}    />
+      <Tab.Screen name="Profile"  component={ProfileWrapped}  options={tabOptions.Profile}  />
       <Tab.Screen name="Settings" component={SettingsWrapped} options={tabOptions.Settings} />
     </Tab.Navigator>
   );
 }
 
 function ManagerNavigator() {
-  const { pendingAlertsCount } = usePendingAlerts();
   return (
     <Tab.Navigator screenOptions={navigatorScreenOptions}>
-      <Tab.Screen name="Home"     component={HomeWrapped}          options={tabOptions.Home} />
+      <Tab.Screen name="Home"     component={HomeWrapped}          options={tabOptions.Home}    />
       <Tab.Screen name="Control"  component={ControlWrapped}       options={tabOptions.Control} />
-      {/* ← Nouveau tab Team : gestion des agents du manager */}
-      <Tab.Screen name="Team"     component={ManagerAgentsWrapped} options={tabOptions.Team} />
+      <Tab.Screen name="Team"     component={ManagerAgentsWrapped} options={tabOptions.Team}    />
       <Tab.Screen name="Profile"  component={ProfileWrapped}       options={tabOptions.Profile} />
-      <Tab.Screen name="Settings" component={SettingsWrapped}      options={tabOptions.Settings} />
+      <Tab.Screen name="Settings" component={SettingsWrapped}      options={tabOptions.Settings}/>
     </Tab.Navigator>
   );
 }
 
 function AgentNavigator() {
-  const { pendingAlertsCount } = usePendingAlerts();
   return (
     <Tab.Navigator screenOptions={navigatorScreenOptions}>
-      <Tab.Screen name="Home"     component={HomeWrapped}     options={tabOptions.Home} />
+      <Tab.Screen name="Home"     component={HomeWrapped}     options={tabOptions.Home}    />
       <Tab.Screen name="Control"  component={ControlWrapped}  options={tabOptions.Control} />
       <Tab.Screen name="Profile"  component={ProfileWrapped}  options={tabOptions.Profile} />
-      <Tab.Screen name="Settings" component={SettingsWrapped} options={tabOptions.Settings} />
+      <Tab.Screen name="Settings" component={SettingsWrapped} options={tabOptions.Settings}/>
     </Tab.Navigator>
   );
 }
 
-// ─── Export principal ──────────────────────────────────────────────────────────
-
+// ─── Export ────────────────────────────────────────────────────────────────────
 export function MainNavigator() {
   const { user } = useAuth();
   if (user?.role === 'admin')   return <AdminNavigator />;
