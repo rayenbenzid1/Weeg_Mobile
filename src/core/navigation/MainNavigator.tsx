@@ -1,18 +1,19 @@
 /**
- * MainNavigator.tsx — Navigation par rôle
+ * src/core/navigation/MainNavigator.tsx — updated
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Role-based navigation:
+ *   ADMIN   : Admin · Profile · Settings
+ *   MANAGER : Home · Control · AI · Team · Profile  (AI tab is manager-only)
+ *   AGENT   : Home · Control · Profile · Settings
  *
- * ADMIN   : Admin · Profile · Settings
- * MANAGER : Home · Control · Team · Profile · Settings
- * AGENT   : Home · Control · Profile · Settings
- *
- * The old per-screen Header (logo + search + notifications + profile row)
- * has been REMOVED.  It is replaced by the new shared <AppHeader /> which
- * is injected via withHeader() below.
+ * AI Chat is a stack screen inside ManagerNavigator, not a bottom tab —
+ * it slides in from the AI Insights screen via navigation.navigate('AIChat').
  */
 
 import React from 'react';
 import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
 import { DashboardScreen }      from '../screens/dashboard/DashboardScreen';
@@ -22,21 +23,27 @@ import { ManagerAgentsScreen }  from '../screens/manager/ManagerAgentsScreen';
 import { ProfileScreen }        from '../screens/profile/ProfileScreen';
 import { SettingsScreen }       from '../screens/settings/SettingsScreen';
 
+// AI Insights screens — manager only
+import { AIInsightsScreen }     from '../screens/ai-insights/AIInsightsScreen';
+import { AIChatScreen }         from '../screens/ai-insights/AIChatScreen';
+
 import { AppHeader } from '../components/AppHeader';
 import { Colors }    from '../constants/theme';
 import { useAuth }   from '../contexts/AuthContext';
 
-const Tab = createBottomTabNavigator();
+const Tab   = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
 const WEEG_BLUE = '#1a6fe8';
 
-// ─── Pending alerts hook ───────────────────────────────────────────────────────
-// TODO: replace with real fetch when /alerts/pending-count/ endpoint is ready
+// ─── Pending alerts ───────────────────────────────────────────────────────────
+
 function usePendingAlerts() {
   const [count] = React.useState(0);
   return { pendingAlertsCount: count };
 }
 
 // ─── Page title map ────────────────────────────────────────────────────────────
+
 const PAGE_TITLES: Record<string, string> = {
   Home:     'Dashboard',
   Control:  'Control Panel',
@@ -44,17 +51,15 @@ const PAGE_TITLES: Record<string, string> = {
   Team:     'My Team',
   Profile:  'Profile',
   Settings: 'Settings',
+  AI:       'AI Insights',
 };
 
 // ─── withHeader HOC ───────────────────────────────────────────────────────────
-// Wraps a screen with the shared AppHeader.
-// The page title is derived from the current route name.
 
 function withHeader(Screen: React.ComponentType<any>, routeName: string) {
   return function WrappedScreen(props: any) {
     const { pendingAlertsCount } = usePendingAlerts();
     const title = PAGE_TITLES[routeName] ?? routeName;
-
     return (
       <View style={{ flex: 1 }}>
         <AppHeader
@@ -70,14 +75,18 @@ function withHeader(Screen: React.ComponentType<any>, routeName: string) {
 }
 
 // ─── Wrapped screens ───────────────────────────────────────────────────────────
+
 const HomeWrapped          = withHeader(DashboardScreen,     'Home');
 const ControlWrapped       = withHeader(ControlScreen,       'Control');
 const AdminWrapped         = withHeader(AdminScreen,         'Admin');
 const ManagerAgentsWrapped = withHeader(ManagerAgentsScreen, 'Team');
 const ProfileWrapped       = withHeader(ProfileScreen,       'Profile');
 const SettingsWrapped      = withHeader(SettingsScreen,      'Settings');
+// AI Insights gets the AppHeader via withHeader; Chat is a full-screen stack
+const AIInsightsWrapped    = withHeader(AIInsightsScreen,    'AI');
 
 // ─── Shared tab bar style ──────────────────────────────────────────────────────
+
 const tabBarStyle = {
   backgroundColor: Colors.white,
   borderTopColor:  Colors.gray100,
@@ -93,14 +102,15 @@ const tabBarStyle = {
 };
 
 const navigatorScreenOptions = {
-  headerShown:          false,
+  headerShown:             false,
   tabBarStyle,
   tabBarActiveTintColor:   WEEG_BLUE,
   tabBarInactiveTintColor: Colors.gray400,
   tabBarLabelStyle: { fontSize: 10, fontWeight: '600' as const, marginTop: 2 },
 };
 
-// ─── Tab icon/label options ────────────────────────────────────────────────────
+// ─── Tab icon options ──────────────────────────────────────────────────────────
+
 const tabOptions = {
   Home: {
     tabBarLabel: 'Home',
@@ -113,6 +123,14 @@ const tabOptions = {
     tabBarIcon: ({ focused, color }: any) => (
       <Ionicons name={focused ? 'pulse' : 'pulse-outline'} size={22} color={color} />
     ),
+  },
+  AI: {
+    tabBarLabel: 'AI',
+    tabBarIcon: ({ focused, color }: any) => (
+      <Ionicons name={focused ? 'sparkles' : 'sparkles-outline'} size={22} color={color} />
+    ),
+    // Highlight the AI tab with a subtle indicator
+    tabBarBadgeStyle: { display: 'none' as any },
   },
   Admin: {
     tabBarLabel: 'Admin',
@@ -140,9 +158,9 @@ const tabOptions = {
   },
 };
 
-// ─── Role navigators ───────────────────────────────────────────────────────────
+// ─── Tab navigators ───────────────────────────────────────────────────────────
 
-function AdminNavigator() {
+function AdminTabs() {
   return (
     <Tab.Navigator screenOptions={navigatorScreenOptions}>
       <Tab.Screen name="Admin"    component={AdminWrapped}    options={tabOptions.Admin}    />
@@ -152,19 +170,41 @@ function AdminNavigator() {
   );
 }
 
-function ManagerNavigator() {
+/**
+ * ManagerTabs — 5 tabs: Home · Control · AI · Team · Profile
+ * No Settings tab in the bottom bar (accessible via Profile screen or drawer).
+ * AI tab sits between Control and Team for a natural workflow flow:
+ *   Operate → Analyse → Team → People
+ */
+function ManagerTabs() {
   return (
     <Tab.Navigator screenOptions={navigatorScreenOptions}>
-      <Tab.Screen name="Home"     component={HomeWrapped}          options={tabOptions.Home}    />
-      <Tab.Screen name="Control"  component={ControlWrapped}       options={tabOptions.Control} />
-      <Tab.Screen name="Team"     component={ManagerAgentsWrapped} options={tabOptions.Team}    />
-      <Tab.Screen name="Profile"  component={ProfileWrapped}       options={tabOptions.Profile} />
-      <Tab.Screen name="Settings" component={SettingsWrapped}      options={tabOptions.Settings}/>
+      <Tab.Screen name="Home"    component={HomeWrapped}          options={tabOptions.Home}    />
+      <Tab.Screen name="Control" component={ControlWrapped}       options={tabOptions.Control} />
+      <Tab.Screen
+        name="AI"
+        component={AIInsightsWrapped}
+        options={{
+          ...tabOptions.AI,
+          // Subtle glow on the AI tab icon when inactive
+          tabBarIcon: ({ focused, color }: any) => (
+            <Ionicons
+              name={focused ? 'sparkles' : 'sparkles-outline'}
+              size={22}
+              color={focused ? color : '#8b5cf6'}  // always purple-tinted
+            />
+          ),
+          tabBarActiveTintColor:   '#6366f1',
+          tabBarInactiveTintColor: '#8b5cf6',
+        }}
+      />
+      <Tab.Screen name="Team"    component={ManagerAgentsWrapped} options={tabOptions.Team}    />
+      <Tab.Screen name="Profile" component={ProfileWrapped}       options={tabOptions.Profile} />
     </Tab.Navigator>
   );
 }
 
-function AgentNavigator() {
+function AgentTabs() {
   return (
     <Tab.Navigator screenOptions={navigatorScreenOptions}>
       <Tab.Screen name="Home"     component={HomeWrapped}     options={tabOptions.Home}    />
@@ -175,10 +215,33 @@ function AgentNavigator() {
   );
 }
 
+// ─── Stack navigators ─────────────────────────────────────────────────────────
+// The AI Chat screen slides over the tab navigator for managers.
+// This keeps the tab bar hidden when in chat (full-screen experience).
+
+function ManagerStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="ManagerTabs" component={ManagerTabs} />
+      <Stack.Screen
+        name="AIChat"
+        component={AIChatScreen}
+        options={{
+          animation: 'slide_from_bottom',
+          gestureEnabled: true,
+          gestureDirection: 'vertical',
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
 // ─── Export ────────────────────────────────────────────────────────────────────
+
 export function MainNavigator() {
   const { user } = useAuth();
-  if (user?.role === 'admin')   return <AdminNavigator />;
-  if (user?.role === 'manager') return <ManagerNavigator />;
-  return <AgentNavigator />;
+
+  if (user?.role === 'admin')   return <AdminTabs />;
+  if (user?.role === 'manager') return <ManagerStack />;
+  return <AgentTabs />;
 }
