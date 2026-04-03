@@ -7,7 +7,7 @@
  *  FIX 3 — StockTab: branch filter chips derived from loaded items (missing in Image 2)
  */
 
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   RefreshControl, Dimensions,
@@ -123,7 +123,7 @@ function useAnalyzer<T>(fetchFn: () => Promise<T>) {
 interface FPt { period: string; base: number; opt: number; pes: number }
 
 function ForecastAreaChart({ points }: { points: FPt[] }) {
-  const CW  = width - 32;
+  const CW  = width - 32 - 28;
   const CH  = 190;
   const PL  = 54; const PR = 12; const PT = 16; const PB = 32;
   const pw  = CW - PL - PR;
@@ -911,24 +911,30 @@ function ForecastTab() {
 
       {/* Per-month bar cards for quick number reference */}
       {fc.map((m, i) => {
-        const basePct = (m.base_lyd / maxBase) * 100;
-        const optPct  = (m.optimistic_lyd / maxBase) * 100;
-        const pesPct  = (m.pessimistic_lyd / maxBase) * 100;
+        const basePct = Math.min((m.base_lyd / maxBase) * 100, 100);
+        const optPct  = Math.min((m.optimistic_lyd / maxBase) * 100, 100);
+        const pesPct  = Math.min((m.pessimistic_lyd / maxBase) * 100, 100);
         return (
           <View key={i} style={S.forecastRow}>
             <Text style={S.forecastPeriod}>{m.period}</Text>
             <View style={{ flex: 1, gap: 4 }}>
               <View style={S.forecastBarRow}>
-                <View style={[S.forecastBarFill, { width: `${optPct}%`, backgroundColor: Colors.green + '60' }]} />
-                <Text style={[S.forecastBarLabel, { color: Colors.green }]}>+{m.upside_pct.toFixed(0)}%</Text>
+                <View style={S.forecastBarTrack}>
+                  <View style={[S.forecastBarFill, { width: `${optPct}%`, backgroundColor: Colors.green + '60' }]} />
+                </View>
+                <Text style={[S.forecastBarLabel, { color: Colors.green }]} numberOfLines={1}>+{m.upside_pct.toFixed(0)}%</Text>
               </View>
               <View style={S.forecastBarRow}>
-                <View style={[S.forecastBarFill, { width: `${basePct}%`, backgroundColor: Colors.blue }]} />
-                <Text style={S.forecastBarLabel}>{fmtLyd(m.base_lyd)}</Text>
+                <View style={S.forecastBarTrack}>
+                  <View style={[S.forecastBarFill, { width: `${basePct}%`, backgroundColor: Colors.blue }]} />
+                </View>
+                <Text style={S.forecastBarLabel} numberOfLines={1}>{fmtLyd(m.base_lyd)}</Text>
               </View>
               <View style={S.forecastBarRow}>
-                <View style={[S.forecastBarFill, { width: `${pesPct}%`, backgroundColor: Colors.red + '60' }]} />
-                <Text style={[S.forecastBarLabel, { color: Colors.red }]}>-{m.downside_pct.toFixed(0)}%</Text>
+                <View style={S.forecastBarTrack}>
+                  <View style={[S.forecastBarFill, { width: `${pesPct}%`, backgroundColor: Colors.red + '60' }]} />
+                </View>
+                <Text style={[S.forecastBarLabel, { color: Colors.red }]} numberOfLines={1}>-{m.downside_pct.toFixed(0)}%</Text>
               </View>
             </View>
           </View>
@@ -1147,11 +1153,12 @@ const S = StyleSheet.create({
   filterChipText:      { fontSize: 12, fontWeight: '600', color: Colors.text3 },
   filterChipTextActive:{ color: '#fff' },
 
-  forecastRow:      { backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
+  forecastRow:      { backgroundColor: Colors.surface, borderRadius: BorderRadius.lg, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
   forecastPeriod:   { fontSize: 12, fontWeight: '700', color: Colors.text, marginBottom: 8 },
-  forecastBarRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
+  forecastBarRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3, width: '100%' },
+  forecastBarTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: Colors.bg, overflow: 'hidden' },
   forecastBarFill:  { height: 6, borderRadius: 3 },
-  forecastBarLabel: { fontSize: 10, color: Colors.text2 },
+  forecastBarLabel: { fontSize: 10, color: Colors.text2, width: 72, textAlign: 'right' },
 
   summaryPill:     { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, borderWidth: 1, marginRight: 8 },
   summaryPillText: { fontSize: 12, fontWeight: '700' },

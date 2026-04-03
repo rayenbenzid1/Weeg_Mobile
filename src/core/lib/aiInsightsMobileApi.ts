@@ -293,7 +293,29 @@ export interface PredictorResult {
   confidence: Confidence;
   cached: boolean;
 }
+// ─── Voice types ──────────────────────────────────────────────────────────
 
+export interface TranscriptionResult {
+  transcription: string;
+  language: string;
+  duration_s: number;
+}
+
+export interface TTSVoice {
+  value: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+  label: string;
+}
+
+export interface VoiceUploadFile {
+  uri: string;
+  fileName: string;
+  mimeType: string;
+}
+
+export interface TTSAudioPayload {
+  audio_base64: string;
+  mime_type: string;
+}
 // ─── Chat types ───────────────────────────────────────────────────────────────
 
 export interface DecisionOption { label: string; pros: string; cons: string }
@@ -371,4 +393,59 @@ export const aiInsightsMobileApi = {
     topic: Topic;
     fallback: boolean;
   }>('/ai-insights/chat/', body),
+
+  // ─── Voice endpoints ───────────────────────────────────────────────────────
+
+  /**
+   * Transcribe audio to text using OpenAI Whisper
+   * @param audioFile - Recorded audio file descriptor (React Native URI)
+   */
+  transcribeAudio: async (audioFile: VoiceUploadFile): Promise<TranscriptionResult> => {
+    const headers = await getAuthHeaders();
+    const formData = new FormData();
+
+    formData.append('audio', {
+      uri: audioFile.uri,
+      name: audioFile.fileName,
+      type: audioFile.mimeType,
+    } as any);
+    formData.append('language', 'en');
+
+    const res = await fetch(`${API_URL}/ai-insights/voice/transcribe/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': headers['Authorization'] || '',
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error || err?.detail || `HTTP ${res.status}`);
+    }
+
+    return res.json();
+  },
+
+  /**
+   * Convert text to speech using OpenAI TTS
+   * @param text - Text to convert to speech
+   * @param voice - Voice option (alloy, echo, fable, onyx, nova, shimmer)
+   * @returns Base64 audio payload for React Native playback
+   */
+  speakText: async (text: string, voice: string = 'nova'): Promise<TTSAudioPayload> => {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${API_URL}/ai-insights/voice/speak/`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ text, voice, as_base64: true }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error || err?.detail || `HTTP ${res.status}`);
+    }
+
+    return res.json();
+  },
 };

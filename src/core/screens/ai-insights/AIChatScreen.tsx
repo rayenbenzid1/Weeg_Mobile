@@ -13,24 +13,23 @@
  */
 
 import React, {
-  useState, useEffect, useRef, useCallback,
-  KeyboardEvent,
+    useState, useEffect, useRef, useCallback
 } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, FlatList,
-  KeyboardAvoidingView, Platform, StyleSheet, Animated,
-  ActivityIndicator, ScrollView, Alert,
+    View, Text, TextInput, TouchableOpacity, FlatList,
+    KeyboardAvoidingView, Platform, StyleSheet, Animated,
+    ActivityIndicator, ScrollView, Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Shadow, BorderRadius } from '../../constants/theme';
+import * as FileSystem from 'expo-file-system';
+import { Colors, Shadow } from '../../constants/theme';
 import {
-  aiInsightsMobileApi,
-  type ChatMessage,
-  type DecisionCard,
-  type Urgency,
-  type Topic,
+    aiInsightsMobileApi,
+    type ChatMessage,
+    type DecisionCard
 } from '../../lib/aiInsightsMobileApi';
+import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -230,7 +229,7 @@ function DecisionCardView({ card, onSelectOption }: { card: DecisionCard; onSele
 
 // ─── Message bubble ───────────────────────────────────────────────────────────
 
-function MessageBubble({ message, onFollowup }: { message: ChatMessage; onFollowup: (q: string) => void }) {
+function MessageBubble({ message, onFollowup, onPlayAudio, isPlaying, playingMessageId }: { message: ChatMessage; onFollowup: (q: string) => void; onPlayAudio?: (msgId: string) => void; isPlaying?: boolean; playingMessageId?: string | null }) {
   const isUser = message.role === 'user';
 
   const renderText = (text: string) =>
@@ -263,6 +262,7 @@ function MessageBubble({ message, onFollowup }: { message: ChatMessage; onFollow
   const urgency = message.urgency;
   const topicCfg = topic ? TOPIC_CONFIG[topic] : null;
   const urgencyColor = urgency && urgency !== 'low' ? URGENCY_COLOR[urgency] : null;
+  const isCurrentlyPlaying = isPlaying && playingMessageId === message.id;
 
   return (
     <View style={styles.msgRowAI}>
@@ -270,36 +270,45 @@ function MessageBubble({ message, onFollowup }: { message: ChatMessage; onFollow
         <Ionicons name="sparkles" size={13} color="#fff" />
       </LinearGradient>
       <View style={{ flex: 1 }}>
-        {/* Badges */}
-        {(topicCfg && topic !== 'general') || urgencyColor ? (
-          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
-            {topicCfg && topic !== 'general' && (
-              <View style={[styles.topicBadge, { backgroundColor: topicCfg.color + '18', borderColor: topicCfg.color + '30' }]}>
-                <Text style={[styles.topicBadgeText, { color: topicCfg.color }]}>{topicCfg.label}</Text>
-              </View>
-            )}
-            {urgencyColor && (
-              <View style={[styles.topicBadge, { backgroundColor: urgencyColor + '18', borderColor: urgencyColor + '30', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
-                <View style={[styles.urgencyDot, { backgroundColor: urgencyColor }]} />
-                <Text style={[styles.topicBadgeText, { color: urgencyColor }]}>{urgency}</Text>
-              </View>
-            )}
-            {message.fallback && (
-              <View style={[styles.topicBadge, { backgroundColor: Colors.amber + '15', borderColor: Colors.amber + '30' }]}>
-                <Text style={[styles.topicBadgeText, { color: Colors.amber }]}>offline</Text>
-              </View>
-            )}
-          </View>
-        ) : null}
+        {/* Badges + Audio button */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          {(topicCfg && topic !== 'general') || urgencyColor ? (
+            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+              {topicCfg && topic !== 'general' && (
+                <View style={[styles.topicBadge, { backgroundColor: topicCfg.color + '18', borderColor: topicCfg.color + '30' }]}>
+                  <Text style={[styles.topicBadgeText, { color: topicCfg.color }]}>{topicCfg.label}</Text>
+                </View>
+              )}
+              {urgencyColor && (
+                <View style={[styles.topicBadge, { backgroundColor: urgencyColor + '18', borderColor: urgencyColor + '30', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                  <View style={[styles.urgencyDot, { backgroundColor: urgencyColor }]} />
+                  <Text style={[styles.topicBadgeText, { color: urgencyColor }]}>{urgency}</Text>
+                </View>
+              )}
+              {message.fallback && (
+                <View style={[styles.topicBadge, { backgroundColor: Colors.amber + '15', borderColor: Colors.amber + '30' }]}>
+                  <Text style={[styles.topicBadgeText, { color: Colors.amber }]}>offline</Text>
+                </View>
+              )}
+            </View>
+          ) : null}
+          {/* Play audio button */}
+          {onPlayAudio && (
+            <TouchableOpacity
+              style={[styles.audioBtn, isCurrentlyPlaying && styles.audioBtnPlaying]}
+              onPress={() => onPlayAudio(message.id)}
+            >
+              <Ionicons name={isCurrentlyPlaying ? 'stop-circle' : 'volume-high'} size={14} color="#fff" />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Bubble — text only, decision card is separate below */}
         <View style={styles.aiBubble}>
           <Text style={styles.aiText}>{renderText(message.content)}</Text>
         </View>
 
-        {/* FIX 4: Decision card rendered OUTSIDE the bubble as its own block.
-            This ensures the card is fully visible and scrollable, and the
-            option buttons are not clipped by the bubble overflow. */}
+        {/* Decision card rendered OUTSIDE the bubble as its own block */}
         {message.decision_card && (
           <DecisionCardView card={message.decision_card} onSelectOption={onFollowup} />
         )}
@@ -381,9 +390,13 @@ export function AIChatScreen({ navigation }: any) {
   const [showTopicPanel, setShowTopicPanel] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
 
   const listRef = useRef<FlatList>(null);
   const phraseRef = useRef(0);
+  const voiceRecorder = useVoiceRecorder();
+  const currentAudioRef = useRef<NodeJS.Timeout | null>(null);
 
   // Cycle loading phrases
   useEffect(() => {
@@ -472,6 +485,68 @@ export function AIChatScreen({ navigation }: any) {
     ]);
   };
 
+  // Handle voice recording
+  const handleMicPress = async () => {
+    if (voiceRecorder.state.recording) {
+      // Stop recording and transcribe
+      const audioFile = await voiceRecorder.stopRecording();
+      if (audioFile) {
+        setTranscribing(true);
+        try {
+          const result = await aiInsightsMobileApi.transcribeAudio(audioFile);
+          if (result.transcription) {
+            send(result.transcription);
+          }
+        } catch (err) {
+          Alert.alert('Transcription Error', `Failed to transcribe audio: ${err}`);
+        } finally {
+          try {
+            await FileSystem.deleteAsync(audioFile.uri, { idempotent: true });
+          } catch {
+            // Ignore cleanup failures for temp recording files.
+          }
+          setTranscribing(false);
+        }
+      }
+    } else {
+      // Start recording
+      await voiceRecorder.startRecording();
+    }
+  };
+
+  // Handle audio playback for AI responses
+  const handlePlayAudio = async (msgId: string) => {
+    if (playingMessageId === msgId) {
+      // Stop current playback
+      await voiceRecorder.stopPlaying();
+      setPlayingMessageId(null);
+      if (currentAudioRef.current) {
+        clearTimeout(currentAudioRef.current);
+        currentAudioRef.current = null;
+      }
+    } else {
+      // Find message and play its audio
+      const message = messages.find(m => m.id === msgId);
+      if (!message) return;
+
+      setPlayingMessageId(msgId);
+      try {
+        const audioPayload = await aiInsightsMobileApi.speakText(message.content.substring(0, 4096), 'nova');
+        const ext = audioPayload.mime_type.includes('mpeg') ? 'mp3' : 'm4a';
+        await voiceRecorder.playAudio(audioPayload.audio_base64, ext);
+
+        // Auto-stop after expected duration (approximate)
+        if (currentAudioRef.current) clearTimeout(currentAudioRef.current);
+        currentAudioRef.current = setTimeout(() => {
+          setPlayingMessageId(null);
+        }, Math.min(message.content.length * 30, 60000)); // Rough estimate
+      } catch (err) {
+        Alert.alert('Error', `Failed to play audio: ${err}`);
+        setPlayingMessageId(null);
+      }
+    }
+  };
+
   const allItems = [...messages, ...(sending ? [{ id: '__typing__', role: 'typing' as any, content: '', time: '' }] : [])];
 
   return (
@@ -515,7 +590,13 @@ export function AIChatScreen({ navigation }: any) {
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           renderItem={({ item }) => {
             if (item.role === 'typing') return <TypingIndicator phrase={loadingPhrase} />;
-            return <MessageBubble message={item as ChatMessage} onFollowup={send} />;
+            return <MessageBubble 
+              message={item as ChatMessage} 
+              onFollowup={send}
+              onPlayAudio={handlePlayAudio}
+              isPlaying={voiceRecorder.state.playing}
+              playingMessageId={playingMessageId}
+            />;
           }}
         />
       )}
@@ -533,6 +614,37 @@ export function AIChatScreen({ navigation }: any) {
         >
           <Ionicons name="apps-outline" size={20} color={showTopicPanel ? Colors.blue : Colors.text3} />
         </TouchableOpacity>
+        
+        {/* Microphone button */}
+        <TouchableOpacity
+          style={[
+            styles.iconBtn,
+            (voiceRecorder.state.recording || transcribing) && { backgroundColor: Colors.red + '20' }
+          ]}
+          onPress={handleMicPress}
+          disabled={sending || transcribing}
+        >
+          {transcribing ? (
+            <ActivityIndicator size="small" color={Colors.red} />
+          ) : (
+            <Ionicons 
+              name={voiceRecorder.state.recording ? 'stop-circle' : 'mic-outline'} 
+              size={20} 
+              color={voiceRecorder.state.recording ? Colors.red : Colors.text3} 
+            />
+          )}
+        </TouchableOpacity>
+
+        {/* Recording duration display */}
+        {voiceRecorder.state.recording && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.red }} />
+            <Text style={{ fontSize: 12, color: Colors.red, fontWeight: '600' }}>
+              {voiceRecorder.recordingDuration}s
+            </Text>
+          </View>
+        )}
+        
         <TextInput
           style={styles.input}
           value={input}
@@ -542,6 +654,7 @@ export function AIChatScreen({ navigation }: any) {
           multiline
           maxLength={500}
           returnKeyType="default"
+          editable={!voiceRecorder.state.recording && !transcribing}
           onSubmitEditing={() => { if (!input.trim()) return; }}
         />
         <TouchableOpacity
@@ -555,7 +668,11 @@ export function AIChatScreen({ navigation }: any) {
           }
         </TouchableOpacity>
       </View>
-      <Text style={styles.inputHint}>Enter to add a new line · Tap send to submit</Text>
+      <Text style={styles.inputHint}>
+        {voiceRecorder.state.recording 
+          ? 'Tap microphone to stop and transcribe' 
+          : 'Enter to add a new line · Tap send to submit'}
+      </Text>
     </KeyboardAvoidingView>
   );
 }
@@ -637,4 +754,8 @@ const styles = StyleSheet.create({
   sendBtn:   { width: 40, height: 40, borderRadius: 14, backgroundColor: Colors.blue, alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: Colors.bg },
   inputHint: { fontSize: 10, color: Colors.text3, textAlign: 'center', paddingBottom: 6, backgroundColor: Colors.surface },
+
+  // Voice controls
+  audioBtn: { width: 30, height: 30, borderRadius: 8, backgroundColor: Colors.blue, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  audioBtnPlaying: { backgroundColor: Colors.red },
 });
