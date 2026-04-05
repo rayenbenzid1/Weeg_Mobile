@@ -11,25 +11,27 @@
  */
 
 import React from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
-import { DashboardScreen }      from '../screens/dashboard/DashboardScreen';
-import { ControlScreen }        from '../screens/control/ControlScreen';
-import { AdminScreen }          from '../screens/admin/AdminScreen';
-import { ManagerAgentsScreen }  from '../screens/manager/ManagerAgentsScreen';
-import { ProfileScreen }        from '../screens/profile/ProfileScreen';
-import { SettingsScreen }       from '../screens/settings/SettingsScreen';
+import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
+import { ControlScreen } from '../screens/control/ControlScreen';
+import { AdminScreen } from '../screens/admin/AdminScreen';
+import { ManagerAgentsScreen } from '../screens/manager/ManagerAgentsScreen';
+import { AlertsScreen } from '../screens/alerts/AlertsScreen';
+import { ProfileScreen } from '../screens/profile/ProfileScreen';
+import { SettingsScreen } from '../screens/settings/SettingsScreen';
 
 // AI Insights screens — manager only
-import { AIInsightsScreen }     from '../screens/ai-insights/AIInsightsScreen';
-import { AIChatScreen }         from '../screens/ai-insights/AIChatScreen';
+import { AIInsightsScreen } from '../screens/ai-insights/AIInsightsScreen';
+import { AIChatScreen } from '../screens/ai-insights/AIChatScreen';
 
 import { AppHeader } from '../components/AppHeader';
-import { Colors }    from '../constants/theme';
-import { useAuth }   from '../contexts/AuthContext';
+import { Colors } from '../constants/theme';
+import { useAuth } from '../contexts/AuthContext';
+import { NotificationsService } from '../lib/api';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -38,7 +40,35 @@ const WEEG_BLUE = '#1a6fe8';
 // ─── Pending alerts ───────────────────────────────────────────────────────────
 
 function usePendingAlerts() {
-  const [count] = React.useState(0);
+  const [count, setCount] = React.useState(0);
+
+  React.useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      await NotificationsService.detectNotifications();
+      const res = await NotificationsService.getUnreadCount();
+      if (active && res.ok && res.data) {
+        setCount(res.data.count);
+      }
+    };
+
+    load();
+    const timer = setInterval(load, 15_000);
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        load();
+      }
+    });
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, []);
+
   return { pendingAlertsCount: count };
 }
 
@@ -52,6 +82,7 @@ const PAGE_TITLES: Record<string, string> = {
   Profile:  'Profile',
   Settings: 'Settings',
   AI:       'AI Insights',
+  Alerts:   'Notifications',
 };
 
 // ─── withHeader HOC ───────────────────────────────────────────────────────────
@@ -82,6 +113,7 @@ const AdminWrapped         = withHeader(AdminScreen,         'Admin');
 const ManagerAgentsWrapped = withHeader(ManagerAgentsScreen, 'Team');
 const ProfileWrapped       = withHeader(ProfileScreen,       'Profile');
 const SettingsWrapped      = withHeader(SettingsScreen,      'Settings');
+const AlertsWrapped        = withHeader(AlertsScreen,        'Alerts');
 // AI Insights gets the AppHeader via withHeader; Chat is a full-screen stack
 const AIInsightsWrapped    = withHeader(AIInsightsScreen,    'AI');
 
@@ -166,6 +198,14 @@ function AdminTabs() {
       <Tab.Screen name="Admin"    component={AdminWrapped}    options={tabOptions.Admin}    />
       <Tab.Screen name="Profile"  component={ProfileWrapped}  options={tabOptions.Profile}  />
       <Tab.Screen name="Settings" component={SettingsWrapped} options={tabOptions.Settings} />
+      <Tab.Screen
+        name="Alerts"
+        component={AlertsWrapped}
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -200,6 +240,14 @@ function ManagerTabs() {
       />
       <Tab.Screen name="Team"    component={ManagerAgentsWrapped} options={tabOptions.Team}    />
       <Tab.Screen name="Profile" component={ProfileWrapped}       options={tabOptions.Profile} />
+      <Tab.Screen
+        name="Alerts"
+        component={AlertsWrapped}
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -211,6 +259,14 @@ function AgentTabs() {
       <Tab.Screen name="Control"  component={ControlWrapped}  options={tabOptions.Control} />
       <Tab.Screen name="Profile"  component={ProfileWrapped}  options={tabOptions.Profile} />
       <Tab.Screen name="Settings" component={SettingsWrapped} options={tabOptions.Settings}/>
+      <Tab.Screen
+        name="Alerts"
+        component={AlertsWrapped}
+        options={{
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
     </Tab.Navigator>
   );
 }

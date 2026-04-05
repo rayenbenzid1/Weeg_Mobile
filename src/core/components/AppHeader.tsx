@@ -9,7 +9,7 @@
  *  - Shared across Dashboard, Control, Profile, Settings, etc.
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
 } from 'react-native';

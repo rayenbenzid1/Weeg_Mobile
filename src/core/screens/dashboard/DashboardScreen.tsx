@@ -17,25 +17,25 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, RefreshControl, ActivityIndicator,
+    View, Text, ScrollView, TouchableOpacity, StyleSheet,
+    Dimensions, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadow, BorderRadius, getRiskColor } from '../../constants/theme';
 import {
-  RiskPill, BranchTag, SectionHeader, SummaryStrip,
-  MiniKpi, FilterChip, EmptyState, Avatar,
+    RiskPill, BranchTag, SectionHeader, EmptyState, Avatar
 } from '../../components/SharedComponents';
 import { FilterSheet, ActiveFilterChips } from '../../components/FilterSheet';
 import {
-  DashboardService,
-  AgingService,
-  TransactionMobileService,
-  type DashboardKPIs,
-  type AgingRiskItem,
-  type MonthlySummaryItem,
+    DashboardService,
+    AgingService,
+    TransactionMobileService,
+    type DashboardKPIs,
+    type AgingRiskItem,
+    type MonthlySummaryItem,
 } from '../../lib/mobileDataService';
+import { NotificationsService } from '../../lib/api';
 
 const { width } = Dimensions.get('window');
 const CARD_W = (width - 32 - 10) / 2;
@@ -214,6 +214,11 @@ export function DashboardScreen({ navigation }: any) {
   }, [filters]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  useEffect(() => {
+    // Prime notifications as soon as dashboard opens.
+    NotificationsService.detectNotifications().catch(() => {});
+  }, []);
 
   useEffect(() => {
     TransactionMobileService.getBranches()

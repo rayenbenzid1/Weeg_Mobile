@@ -51,6 +51,26 @@ export interface BackendUser {
   created_at: string;
 }
 
+export interface NotificationItem {
+  id: string;
+  alert_type: 'low_stock' | 'overdue' | 'risk' | 'sales_drop' | 'high_receivables' | 'dso' | 'concentration' | 'churn' | 'anomaly' | 'scheduled_report' | 'system';
+  severity: 'low' | 'medium' | 'critical';
+  title: string;
+  message: string;
+  detail: string;
+  metadata: Record<string, any>;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationsPage {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: NotificationItem[];
+}
+
 // ─── Token Storage ────────────────────────────────────────────────────────────
 
 export const TokenStorage = {
@@ -427,10 +447,74 @@ export const SessionService = {
   },
 };
 
+// ─── Notifications Service ───────────────────────────────────────────────────
+
+export const NotificationsService = {
+  /** Déclencher la détection backend — POST /api/notifications/detect/ */
+  async detectNotifications(): Promise<ApiResponse<{ created: number }>> {
+    return request('/notifications/detect/', { method: 'POST' });
+  },
+
+  /** Liste des notifications — GET /api/notifications/ */
+  async listNotifications(params?: {
+    page?: number;
+    page_size?: number;
+    severity?: 'low' | 'medium' | 'critical';
+    alert_type?: NotificationItem['alert_type'];
+    is_read?: boolean;
+    search?: string;
+    auto_detect?: boolean;
+  }): Promise<ApiResponse<NotificationsPage>> {
+    const query = new URLSearchParams();
+
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.page_size) query.set('page_size', String(params.page_size));
+    if (params?.severity) query.set('severity', params.severity);
+    if (params?.alert_type) query.set('alert_type', params.alert_type);
+    if (params?.is_read !== undefined) query.set('is_read', String(params.is_read));
+    if (params?.search) query.set('search', params.search);
+    if (params?.auto_detect !== undefined) query.set('auto_detect', String(params.auto_detect));
+
+    const qs = query.toString();
+    return request(`/notifications/${qs ? `?${qs}` : ''}`);
+  },
+
+  /** Compte des notifications non lues. */
+  async getUnreadCount(): Promise<ApiResponse<{ count: number }>> {
+    const res = await NotificationsService.listNotifications({
+      is_read: false,
+      page_size: 1,
+      auto_detect: true,
+    });
+    if (!res.ok || !res.data) return res as ApiResponse<{ count: number }>;
+
+    return {
+      status: res.status,
+      ok: true,
+      data: { count: res.data.count },
+    };
+  },
+
+  /** Marquer des notifications comme lues — POST /api/notifications/mark-read/ */
+  async markRead(ids?: string[]): Promise<ApiResponse<{ marked: number }>> {
+    const body = ids && ids.length > 0 ? { ids } : { all: true };
+    return request('/notifications/mark-read/', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Supprimer une notification — DELETE /api/notifications/{id}/ */
+  async deleteNotification(id: string): Promise<ApiResponse<null>> {
+    return request(`/notifications/${id}/`, { method: 'DELETE' });
+  },
+};
+
 export default {
   Auth: AuthService,
   User: UserService,
   Admin: AdminService,
   Manager: ManagerService,
   Session: SessionService,
+  Notifications: NotificationsService,
 };
