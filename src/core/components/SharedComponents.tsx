@@ -190,7 +190,7 @@ export function MiniKpi({ value, label, color }: { value: string; label: string;
 }
 
 const mk = StyleSheet.create({
-  wrap: { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:12, borderWidth:1, borderColor:Colors.border, minWidth:100, borderTopWidth:3 },
+  wrap: { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:12, paddingBottom:15,marginBottom:15, borderWidth:1, borderColor:Colors.border, minWidth:100, borderTopWidth:3 ,minHeight:56 },
   val:  { fontSize:16, fontWeight:'700', color:Colors.text, marginBottom:3 },
   lbl:  { fontSize:9.5, color:Colors.text3, fontWeight:'600' },
 });
