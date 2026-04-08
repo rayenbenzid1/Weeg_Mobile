@@ -38,36 +38,30 @@ const T = {
 // ─── Permissions Config ───────────────────────────────────────────────────────
 const PERMISSIONS_GROUPS = [
   { group: 'Data Management', icon: 'server-outline', color: T.blue, items: [
-    { id: 'import-data', label: 'Import Data',  desc: 'Import Excel files' },
-    { id: 'export-data', label: 'Export Data',  desc: 'Export to Excel/CSV' },
+    { id: 'import-data',            label: 'Import Data',            desc: 'Import Excel files' },
   ]},
   { group: 'Analytics & Reports', icon: 'bar-chart-outline', color: T.purple, items: [
-    { id: 'view-dashboard',   label: 'View Dashboard',   desc: 'Access main dashboard with KPIs' },
-    { id: 'view-reports',     label: 'View Reports',     desc: 'Access and view all reports' },
-    { id: 'generate-reports', label: 'Generate Reports', desc: 'Create custom reports' },
-    { id: 'view-kpi',         label: 'View KPIs',        desc: 'Access KPI engine and metrics' },
-    { id: 'filter-dashboard', label: 'Filter Dashboard', desc: 'Apply filters to dashboard' },
-    { id: 'ai-insights',      label: 'AI Insights',      desc: 'Access AI-powered insights' },
+    { id: 'view-dashboard',         label: 'View Dashboard',         desc: 'Access main dashboard with KPIs' },
+    { id: 'view-reports',           label: 'View Reports',           desc: 'Access and view all reports' },
+    { id: 'view-kpi',               label: 'View KPIs',              desc: 'Access KPI engine and metrics' },
+    { id: 'ai-insights',            label: 'AI Insights',            desc: 'Access AI-powered insights' },
   ]},
   { group: 'Sales & Inventory', icon: 'cube-outline', color: T.green, items: [
-    { id: 'view-sales',             label: 'View Sales',         desc: 'Access sales and purchases data' },
-    { id: 'view-inventory',         label: 'View Inventory',     desc: 'Check product availability' },
-    { id: 'view-customer-payments', label: 'Customer Payments',  desc: 'Access payment history' },
-    { id: 'view-aging',             label: 'Aging Receivables',  desc: 'Track overdue payments' },
+    { id: 'view-sales',             label: 'View Sales',             desc: 'Access sales and purchases data' },
+    { id: 'view-inventory',         label: 'View Inventory',         desc: 'Check product availability' },
+    { id: 'view-aging',             label: 'View Aging Receivables', desc: 'Track overdue payments' },
   ]},
   { group: 'System Access', icon: 'shield-outline', color: T.amber, items: [
-    { id: 'receive-notifications', label: 'Notifications',   desc: 'Get notified about events' },
-    { id: 'manage-alerts',         label: 'Manage Alerts',   desc: 'Mark alerts as resolved' },
-    { id: 'view-profile',          label: 'View Profile',    desc: 'Access personal profile' },
-    { id: 'change-password',       label: 'Change Password', desc: 'Update account password' },
+    { id: 'view-team',              label: 'View Team',              desc: 'Access the My Team page' },
+    { id: 'receive-notifications',  label: 'Notifications',          desc: 'Get notified about events' },
+    { id: 'view-profile',           label: 'View Profile',           desc: 'Access personal profile' },
   ]},
 ];
 
 const ALL_PERMS = PERMISSIONS_GROUPS.flatMap(g => g.items.map(i => i.id));
 const DEFAULT_PERMS = [
-  'view-dashboard','view-reports','generate-reports','view-kpi',
-  'filter-dashboard','view-sales','view-inventory','view-customer-payments',
-  'receive-notifications','manage-alerts','view-profile','change-password',
+  'import-data','view-dashboard','view-team','view-reports','view-kpi',
+  'view-sales','view-inventory','view-aging','receive-notifications','view-profile','ai-insights',
 ];
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
