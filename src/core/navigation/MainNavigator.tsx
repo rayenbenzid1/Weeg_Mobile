@@ -4,7 +4,7 @@
  * Role-based navigation:
  *   ADMIN   : Admin · Profile · Settings
  *   MANAGER : Home · Control · AI · Team · Profile  (AI tab is manager-only)
- *   AGENT   : Home · Control · Profile · Settings
+ *   AGENT   : Home · Control · Profile
  *
  * AI Chat is a stack screen inside ManagerNavigator, not a bottom tab —
  * it slides in from the AI Insights screen via navigation.navigate('AIChat').
@@ -22,7 +22,6 @@ import { AdminScreen } from '../screens/admin/AdminScreen';
 import { ManagerAgentsScreen } from '../screens/manager/ManagerAgentsScreen';
 import { AlertsScreen } from '../screens/alerts/AlertsScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
-import { SettingsScreen } from '../screens/settings/SettingsScreen';
 
 // AI Insights screens — manager only
 import { AIInsightsScreen } from '../screens/ai-insights/AIInsightsScreen';
@@ -112,7 +111,6 @@ const ControlWrapped       = withHeader(ControlScreen,       'Control');
 const AdminWrapped         = withHeader(AdminScreen,         'Admin');
 const ManagerAgentsWrapped = withHeader(ManagerAgentsScreen, 'Team');
 const ProfileWrapped       = withHeader(ProfileScreen,       'Profile');
-const SettingsWrapped      = withHeader(SettingsScreen,      'Settings');
 const AlertsWrapped        = withHeader(AlertsScreen,        'Alerts');
 // AI Insights gets the AppHeader via withHeader; Chat is a full-screen stack
 const AIInsightsWrapped    = withHeader(AIInsightsScreen,    'AI');
@@ -197,7 +195,6 @@ function AdminTabs() {
     <Tab.Navigator screenOptions={navigatorScreenOptions}>
       <Tab.Screen name="Admin"    component={AdminWrapped}    options={tabOptions.Admin}    />
       <Tab.Screen name="Profile"  component={ProfileWrapped}  options={tabOptions.Profile}  />
-      <Tab.Screen name="Settings" component={SettingsWrapped} options={tabOptions.Settings} />
       <Tab.Screen
         name="Alerts"
         component={AlertsWrapped}
@@ -258,7 +255,6 @@ function AgentTabs() {
       <Tab.Screen name="Home"     component={HomeWrapped}     options={tabOptions.Home}    />
       <Tab.Screen name="Control"  component={ControlWrapped}  options={tabOptions.Control} />
       <Tab.Screen name="Profile"  component={ProfileWrapped}  options={tabOptions.Profile} />
-      <Tab.Screen name="Settings" component={SettingsWrapped} options={tabOptions.Settings}/>
       <Tab.Screen
         name="Alerts"
         component={AlertsWrapped}

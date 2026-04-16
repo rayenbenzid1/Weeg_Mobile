@@ -2,7 +2,7 @@
  * AdminScreen.tsx — WEEG Admin v3 Premium
  * Deep navy + indigo accent, refined cards with clear action hierarchy
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
   Alert, Modal, TextInput, ActivityIndicator, RefreshControl,
@@ -162,7 +162,7 @@ function UserCard({ u, tab, onApprove, onRejectStart, onSuspend, onReactivate }:
   const industry   = co.industry || u.industry || null;
   const country    = co.country || u.country || null;
   const city       = co.city || u.city || null;
-  const showCompany = (isPending || u.role === 'manager') && (companyName || industry || country);
+  const showCompany = (isPending || u.role === 'manager' || u.role === 'agent') && (companyName || industry || country || city);
 
   return (
     <View style={S.card}>
@@ -222,7 +222,7 @@ function UserCard({ u, tab, onApprove, onRejectStart, onSuspend, onReactivate }:
       {!isPending && !isSuspended && !canSuspend && u.role === 'agent' && (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: T.border2 }}>
           <Ionicons name="information-circle-outline" size={12} color={T.text4} />
-          <Text style={{ fontSize: 10.5, color: T.text4, fontStyle: 'italic' }}>Permissions managed by their manager</Text>
+          <Text style={{ fontSize: 10.5, color: T.text4, fontStyle: 'italic' }}>Managed by their manager</Text>
         </View>
       )}
     </View>
@@ -232,7 +232,7 @@ function UserCard({ u, tab, onApprove, onRejectStart, onSuspend, onReactivate }:
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export function AdminScreen() {
   const { approveManager, rejectManager } = useAuth();
-  const [tab,          setTab]          = useState<AdminTab>('pending');
+  const [tab,          setTab]          = useState<AdminTab>('all');
   const [users,        setUsers]        = useState<any[]>([]);
   const [loading,      setLoading]      = useState(false);
   const [refreshing,   setRefreshing]   = useState(false);
@@ -297,11 +297,11 @@ export function AdminScreen() {
   ]);
 
   const TABS: { id: AdminTab; label: string; icon: string }[] = [
+    { id: 'all',       label: 'All',       icon: 'grid-outline'      },
     { id: 'pending',   label: 'Pending',   icon: 'time-outline'      },
     { id: 'managers',  label: 'Managers',  icon: 'briefcase-outline' },
     { id: 'agents',    label: 'Agents',    icon: 'people-outline'    },
     { id: 'suspended', label: 'Suspended', icon: 'ban-outline'       },
-    { id: 'all',       label: 'All',       icon: 'grid-outline'      },
   ];
 
   return (

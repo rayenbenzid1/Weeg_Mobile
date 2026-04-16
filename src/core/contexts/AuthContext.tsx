@@ -19,7 +19,6 @@ export interface User {
   name: string;           // = full_name du backend
   email: string;
   role: UserRole;
-  permissions: string[];  // = permissions_list du backend
   isVerified: boolean;    // = is_verified du backend
   createdAt: string;
   // Champs supplémentaires backend
@@ -70,10 +69,8 @@ interface AuthContextType {
     firstName: string;
     lastName: string;
     phone?: string;
-    permissionsList?: string[];
     temporaryPassword: string;
   }) => Promise<{ success: boolean; message: string; agent?: any }>;
-  updateAgentPermissions: (agentId: string, permissions: string[]) => Promise<{ success: boolean; message: string }>;
 }
 
 // ─── Mapper backend → App ──────────────────────────────────────────────────────
@@ -84,7 +81,6 @@ function mapBackendUser(backendUser: BackendUser): User {
     name: backendUser.full_name || `${backendUser.first_name} ${backendUser.last_name}`.trim(),
     email: backendUser.email,
     role: backendUser.role as UserRole,
-    permissions: backendUser.permissions_list || [],
     isVerified: backendUser.is_verified,
     createdAt: backendUser.created_at,
     firstName: backendUser.first_name,
@@ -187,7 +183,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name: loginUser.full_name,
       email: loginUser.email,
       role: loginUser.role as UserRole,
-      permissions: [],
       isVerified: true,
       createdAt: new Date().toISOString(),
       mustChangePassword: loginUser.must_change_password,
@@ -321,7 +316,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     firstName: string;
     lastName: string;
     phone?: string;
-    permissionsList?: string[];
     temporaryPassword: string;
   }) => {
     const res = await ManagerService.createAgent({
@@ -329,7 +323,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       first_name: data.firstName.trim(),
       last_name: data.lastName.trim(),
       phone_number: data.phone?.trim() || undefined,
-      permissions_list: data.permissionsList || [],
       temporary_password: data.temporaryPassword,
     });
 
@@ -341,16 +334,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, message: msgs };
     }
     return { success: false, message: res.error || 'Erreur lors de la création' };
-  }, []);
-
-  // ── Manager: Modifier permissions agent ───────────────────────────────────
-  const updateAgentPermissions = useCallback(async (
-    agentId: string,
-    permissions: string[],
-  ) => {
-    const res = await ManagerService.updateAgentPermissions(agentId, permissions);
-    if (res.ok) return { success: true, message: res.data?.message || 'Permissions mises à jour !' };
-    return { success: false, message: res.error || 'Erreur' };
   }, []);
 
   return (
@@ -368,7 +351,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       rejectManager,
       getPendingManagers,
       createAgent,
-      updateAgentPermissions,
     }}>
       {children}
     </AuthContext.Provider>

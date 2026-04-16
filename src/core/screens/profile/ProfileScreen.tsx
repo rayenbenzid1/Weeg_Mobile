@@ -10,9 +10,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, BorderRadius, Shadow } from '../../constants/theme';
-import {
-  Avatar, FormField, PrimaryButton, AlertBanner, EmptyState,
-} from '../../components/SharedComponents';
+import { FormField, PrimaryButton, AlertBanner, EmptyState } from '../../components/SharedComponents';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserService, SessionService } from '../../lib/api';
 
@@ -28,6 +26,27 @@ function InfoRow({ icon, label, value }: { icon: string; label: string; value: s
       <Text style={S.infoLabel}>{label}</Text>
       <Text style={S.infoValue} numberOfLines={1}>{value || '—'}</Text>
     </View>
+  );
+}
+
+function SupportRow({ icon, label, desc, onPress, isLast = false }: {
+  icon: string;
+  label: string;
+  desc?: string;
+  onPress: () => void;
+  isLast?: boolean;
+}) {
+  return (
+    <TouchableOpacity style={[S.supportRow, !isLast && S.supportRowBorder]} onPress={onPress} activeOpacity={0.75}>
+      <View style={S.supportIconWrap}>
+        <Ionicons name={icon as any} size={15} color={Colors.text3} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={S.supportLabel}>{label}</Text>
+        {desc ? <Text style={S.supportDesc}>{desc}</Text> : null}
+      </View>
+      <Ionicons name="chevron-forward" size={14} color={Colors.text3} />
+    </TouchableOpacity>
   );
 }
 
@@ -373,6 +392,36 @@ export function ProfileScreen() {
             )}
 
             {/* Logout */}
+            {(
+              <View style={[S.card, Shadow.sm, { marginTop:12 }]}>
+                <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginBottom:12 }}>
+                  <View style={S.cardIconWrap}>
+                    <Ionicons name="help-circle-outline" size={15} color={Colors.blue} />
+                  </View>
+                  <Text style={S.cardTitle}>Support & Legal</Text>
+                </View>
+
+                <SupportRow
+                  icon="help-circle-outline"
+                  label="Help & Support"
+                  desc="Contact: support@weeg.app"
+                  onPress={() => Alert.alert('Help', 'Contact: support@weeg.app')}
+                />
+                <SupportRow
+                  icon="document-text-outline"
+                  label="Terms & Privacy Policy"
+                  onPress={() => Alert.alert('Terms & Privacy Policy', 'This section will be available soon.')}
+                />
+                <SupportRow
+                  icon="information-circle-outline"
+                  label="About WEEG"
+                  desc="Financial Analytics · v1.0.0"
+                  onPress={() => Alert.alert('WEEG', 'Financial Analytics & System Intelligence\nVersion 1.0.0')}
+                  isLast
+                />
+              </View>
+            )}
+
             <TouchableOpacity
               style={[S.logoutBtn, Shadow.sm, { marginTop:12 }]}
               onPress={() => Alert.alert('Log Out', 'Are you sure?', [
@@ -519,6 +568,12 @@ const S = StyleSheet.create({
   infoIconWrap:{ width:26, height:26, borderRadius:BorderRadius.md, backgroundColor:'rgba(26,92,240,0.08)', alignItems:'center', justifyContent:'center' },
   infoLabel:   { fontSize:12, color:Colors.text3, width:64 },
   infoValue:   { flex:1, fontSize:13, fontWeight:'500', color:Colors.text, textAlign:'right' },
+
+  supportRow:        { flexDirection:'row', alignItems:'center', gap:12, paddingVertical:11 },
+  supportRowBorder:  { borderBottomWidth:1, borderBottomColor:Colors.bg },
+  supportIconWrap:   { width:34, height:34, borderRadius:BorderRadius.lg, backgroundColor:Colors.surface2, alignItems:'center', justifyContent:'center', flexShrink:0 },
+  supportLabel:      { fontSize:13, fontWeight:'600', color:Colors.text },
+  supportDesc:       { fontSize:11, color:Colors.text3, marginTop:2 },
 
   statusChip:    { flexDirection:'row', alignItems:'center', gap:6, paddingHorizontal:12, paddingVertical:7, borderRadius:BorderRadius.full },
   statusChipTxt: { fontSize:12, fontWeight:'700' },

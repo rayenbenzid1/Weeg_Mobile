@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, StatusBar, Image,
+    View, Text, ScrollView, TouchableOpacity, StyleSheet,
+    Dimensions, StatusBar, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, BorderRadius, Typography, Shadow } from '../../constants/theme';
+import { Colors, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 
 const { width } = Dimensions.get('window');
 
@@ -86,7 +86,7 @@ export function LandingScreen({ navigation }: any) {
       benefits: [
         { icon: 'people-outline', text: 'User management' },
         { icon: 'shield-checkmark-outline', text: 'Account validation' },
-        { icon: 'lock-closed-outline', text: 'Permission control' },
+        { icon: 'lock-closed-outline', text: 'Platform security' },
       ],
     },
   };

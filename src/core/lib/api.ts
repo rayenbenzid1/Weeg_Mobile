@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // ─── Configuration ───────────────────────────────────────────────────────────
 
 
-export const BASE_URL = 'http://192.168.0.133:8000'; // Appareil physique (remplacez l'IP)
+export const BASE_URL = 'http://192.168.100.131:8000'; // Appareil physique (remplacez l'IP)
 
 const API_URL = `${BASE_URL}/api`;
 
@@ -41,7 +41,6 @@ export interface BackendUser {
   phone_number: string | null;
   role: 'admin' | 'manager' | 'agent';
   status: 'pending' | 'approved' | 'rejected' | 'active' | 'suspended';
-  permissions_list: string[];
   branch: string | null;
   branch_name: string | null;
   company: string | null;
@@ -384,7 +383,6 @@ export const ManagerService = {
     last_name: string;
     phone_number?: string;
     branch?: string;
-    permissions_list?: string[];
     temporary_password: string;
   }): Promise<ApiResponse<{ message: string; agent: any }>> {
     return request('/users/agents/create/', {
@@ -415,16 +413,6 @@ export const ManagerService = {
     return request(`/users/agents/${agentId}/`, { method: 'DELETE' });
   },
 
-  /** Modifier les permissions d'un agent — PATCH /api/users/users/{id}/permissions/ */
-  async updateAgentPermissions(
-    agentId: string,
-    permissions_list: string[],
-  ): Promise<ApiResponse<{ message: string; permissions_list: string[] }>> {
-    return request(`/users/users/${agentId}/permissions/`, {
-      method: 'PATCH',
-      body: JSON.stringify({ permissions_list }),
-    });
-  },
 };
 
 // ─── Sessions Service ──────────────────────────────────────────────────────────

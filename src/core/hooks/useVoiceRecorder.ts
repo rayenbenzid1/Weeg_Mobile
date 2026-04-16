@@ -1,7 +1,7 @@
 /**
  * src/core/hooks/useVoiceRecorder.ts
  * ─────────────────────────────────────────────────────────────────────────────
- * Manages voice recording, playback, and permissions for AI chat interaction.
+ * Manages voice recording, playback, and microphone access for AI chat interaction.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -71,12 +71,11 @@ export function useVoiceRecorder(): UseVoiceRecorderReturn {
 
   const startRecording = async (): Promise<void> => {
     try {
-      // Request permissions
-      const permission = await Audio.requestPermissionsAsync();
-      if (!permission.granted) {
+      const micAccess = await Audio.requestPermissionsAsync();
+      if (!micAccess.granted) {
         setState(prev => ({
           ...prev,
-          error: 'Microphone permission denied',
+          error: 'Microphone access denied',
         }));
         return;
       }
