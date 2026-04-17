@@ -1,6 +1,10 @@
 /**
  * ProfileScreen.tsx — WEEG v2
- * Tabs: Account (view + edit profile) · Security (change password + sessions)
+ * Tabs: Account (view + edit profile) · Security (change password + biometric + sessions)
+ *
+ * CHANGEMENTS vs version originale :
+ *   - Import BiometricToggle
+ *   - Section "Biometric Login" ajoutée dans l'onglet Security (avant Change Password)
  */
 import React, { useState, useEffect } from 'react';
 import {
@@ -13,6 +17,8 @@ import { Colors, BorderRadius, Shadow } from '../../constants/theme';
 import { FormField, PrimaryButton, AlertBanner, EmptyState } from '../../components/SharedComponents';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserService, SessionService } from '../../lib/api';
+// ↓ NOUVEAU
+import { BiometricToggle } from '../../components/BiometricToggle';
 
 type Tab = 'account' | 'security';
 
@@ -54,29 +60,29 @@ function SupportRow({ icon, label, desc, onPress, isLast = false }: {
 function SessionRow({ session, onRevoke }: { session: any; onRevoke: (id: string) => void }) {
   return (
     <View style={S.sessionRow}>
-      <View style={[S.sessionIcon, session.is_current && { backgroundColor:'rgba(26,92,240,0.08)' }]}>
+      <View style={[S.sessionIcon, session.is_current && { backgroundColor: 'rgba(26,92,240,0.08)' }]}>
         <Ionicons name="phone-portrait-outline" size={15} color={session.is_current ? Colors.blue : Colors.text3} />
       </View>
-      <View style={{ flex:1, minWidth:0 }}>
-        <Text style={{ fontSize:13, fontWeight:'600', color:Colors.text }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 13, fontWeight: '600', color: Colors.text }}>
           {session.device_name || 'Unknown device'}
         </Text>
-        <Text style={{ fontSize:10.5, color:Colors.text3, marginTop:1 }}>{session.ip_address}</Text>
-        <Text style={{ fontSize:10, color:Colors.text3, marginTop:1 }}>
+        <Text style={{ fontSize: 10.5, color: Colors.text3, marginTop: 1 }}>{session.ip_address}</Text>
+        <Text style={{ fontSize: 10, color: Colors.text3, marginTop: 1 }}>
           {new Date(session.last_activity).toLocaleString()}
         </Text>
       </View>
       {session.is_current ? (
         <View style={S.currentBadge}>
-          <View style={{ width:5, height:5, borderRadius:3, backgroundColor:Colors.green }} />
-          <Text style={{ fontSize:10, fontWeight:'700', color:Colors.greenText }}>CURRENT</Text>
+          <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.green }} />
+          <Text style={{ fontSize: 10, fontWeight: '700', color: Colors.greenText }}>CURRENT</Text>
         </View>
       ) : (
         <TouchableOpacity
           onPress={() => onRevoke(session.id)}
-          style={{ paddingHorizontal:10, paddingVertical:6, borderRadius:BorderRadius.md, backgroundColor:Colors.redBg, borderWidth:1, borderColor:'#fecaca' }}
+          style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: BorderRadius.md, backgroundColor: Colors.redBg, borderWidth: 1, borderColor: '#fecaca' }}
         >
-          <Text style={{ fontSize:11, fontWeight:'700', color:Colors.red }}>Revoke</Text>
+          <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.red }}>Revoke</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -90,13 +96,13 @@ function PasswordStrength({ password }: { password: string }) {
   const colors = ['#e83535', '#f59e0b', '#10b981'];
   const labels = ['Weak', 'Fair', 'Strong'];
   return (
-    <View style={{ marginTop:6 }}>
-      <View style={{ flexDirection:'row', gap:4, marginBottom:5 }}>
-        {[0,1,2].map(i => (
-          <View key={i} style={{ flex:1, height:3, borderRadius:2, backgroundColor: i < score ? colors[score - 1] : Colors.border }} />
+    <View style={{ marginTop: 6 }}>
+      <View style={{ flexDirection: 'row', gap: 4, marginBottom: 5 }}>
+        {[0, 1, 2].map(i => (
+          <View key={i} style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: i < score ? colors[score - 1] : Colors.border }} />
         ))}
       </View>
-      <Text style={{ fontSize:10.5, color:colors[score - 1], fontWeight:'600' }}>
+      <Text style={{ fontSize: 10.5, color: colors[score - 1], fontWeight: '600' }}>
         {labels[score - 1]} password
       </Text>
     </View>
@@ -109,12 +115,12 @@ export function ProfileScreen() {
   const [tab, setTab] = useState<Tab>('account');
 
   // ── Account ──────────────────────────────────────────────────────────────
-  const [editMode, setEditMode]         = useState(false);
-  const [firstName, setFirstName]       = useState('');
-  const [lastName, setLastName]         = useState('');
-  const [phone, setPhone]               = useState('');
+  const [editMode, setEditMode]           = useState(false);
+  const [firstName, setFirstName]         = useState('');
+  const [lastName, setLastName]           = useState('');
+  const [phone, setPhone]                 = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
-  const [profileMsg, setProfileMsg]     = useState<{ type:'success'|'error'; text:string }|null>(null);
+  const [profileMsg, setProfileMsg]       = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     setFirstName(user?.firstName || user?.name?.split(' ')[0] || '');
@@ -132,36 +138,36 @@ export function ProfileScreen() {
 
   const handleSaveProfile = async () => {
     if (!firstName.trim()) {
-      setProfileMsg({ type:'error', text:'First name is required.' });
+      setProfileMsg({ type: 'error', text: 'First name is required.' });
       return;
     }
     setSavingProfile(true);
     setProfileMsg(null);
     const res = await UserService.updateProfile({
       first_name: firstName.trim(),
-      last_name:  lastName.trim(),
+      last_name: lastName.trim(),
       phone_number: phone.trim() || undefined,
     });
     setSavingProfile(false);
     if (res.ok) {
       await refreshProfile();
       setEditMode(false);
-      setProfileMsg({ type:'success', text:'Profile updated successfully!' });
+      setProfileMsg({ type: 'success', text: 'Profile updated successfully!' });
     } else {
-      setProfileMsg({ type:'error', text: res.error || 'Failed to update profile.' });
+      setProfileMsg({ type: 'error', text: res.error || 'Failed to update profile.' });
     }
   };
 
   // ── Security ──────────────────────────────────────────────────────────────
-  const [oldPw, setOldPw]               = useState('');
-  const [newPw, setNewPw]               = useState('');
-  const [confirmPw, setConfirmPw]       = useState('');
-  const [showOld, setShowOld]           = useState(false);
-  const [showNew, setShowNew]           = useState(false);
-  const [showConfirm, setShowConfirm]   = useState(false);
-  const [savingPw, setSavingPw]         = useState(false);
-  const [pwMsg, setPwMsg]               = useState<{ type:'success'|'error'; text:string }|null>(null);
-  const [sessions, setSessions]         = useState<any[]>([]);
+  const [oldPw, setOldPw]             = useState('');
+  const [newPw, setNewPw]             = useState('');
+  const [confirmPw, setConfirmPw]     = useState('');
+  const [showOld, setShowOld]         = useState(false);
+  const [showNew, setShowNew]         = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [savingPw, setSavingPw]       = useState(false);
+  const [pwMsg, setPwMsg]             = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [sessions, setSessions]       = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
 
   useEffect(() => {
@@ -177,15 +183,15 @@ export function ProfileScreen() {
 
   const handleChangePassword = async () => {
     if (!oldPw || !newPw || !confirmPw) {
-      setPwMsg({ type:'error', text:'Please fill in all fields.' });
+      setPwMsg({ type: 'error', text: 'Please fill in all fields.' });
       return;
     }
     if (newPw.length < 8) {
-      setPwMsg({ type:'error', text:'Password must be at least 8 characters.' });
+      setPwMsg({ type: 'error', text: 'Password must be at least 8 characters.' });
       return;
     }
     if (newPw !== confirmPw) {
-      setPwMsg({ type:'error', text:'Passwords do not match.' });
+      setPwMsg({ type: 'error', text: 'Passwords do not match.' });
       return;
     }
     setSavingPw(true);
@@ -193,67 +199,71 @@ export function ProfileScreen() {
     const result = await changePassword(oldPw, newPw, confirmPw);
     setSavingPw(false);
     if (result.success) {
-      setPwMsg({ type:'success', text: result.message });
+      setPwMsg({ type: 'success', text: result.message });
       setOldPw(''); setNewPw(''); setConfirmPw('');
     } else {
-      setPwMsg({ type:'error', text: result.message });
+      setPwMsg({ type: 'error', text: result.message });
     }
   };
 
   const handleRevokeSession = (id: string) => {
     Alert.alert('Revoke Session', 'This device will be logged out.', [
-      { text:'Cancel', style:'cancel' },
-      { text:'Revoke', style:'destructive', onPress: async () => {
-        const res = await SessionService.revokeSession(id);
-        if (res.ok) setSessions(prev => prev.filter(s => s.id !== id));
-        else Alert.alert('Error', res.error || 'Failed.');
-      }},
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Revoke', style: 'destructive', onPress: async () => {
+          const res = await SessionService.revokeSession(id);
+          if (res.ok) setSessions(prev => prev.filter(s => s.id !== id));
+          else Alert.alert('Error', res.error || 'Failed.');
+        },
+      },
     ]);
   };
 
   const handleLogoutAll = () => {
     Alert.alert('Log Out All Devices', 'All sessions will be closed.', [
-      { text:'Cancel', style:'cancel' },
-      { text:'Log Out All', style:'destructive', onPress: async () => {
-        const res = await SessionService.logoutAll();
-        if (res.ok) await logout();
-        else Alert.alert('Error', res.error || 'Failed.');
-      }},
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log Out All', style: 'destructive', onPress: async () => {
+          const res = await SessionService.logoutAll();
+          if (res.ok) await logout();
+          else Alert.alert('Error', res.error || 'Failed.');
+        },
+      },
     ]);
   };
 
-  const roleColors: Record<string,string> = { admin:Colors.red, manager:Colors.blue, agent:Colors.green };
-  const initials = (user?.name || 'U').split(' ').map((w:string) => w[0] || '').join('').slice(0, 2).toUpperCase();
+  const roleColors: Record<string, string> = { admin: Colors.red, manager: Colors.blue, agent: Colors.green };
+  const initials = (user?.name || 'U').split(' ').map((w: string) => w[0] || '').join('').slice(0, 2).toUpperCase();
   const mismatch = newPw && confirmPw && newPw !== confirmPw;
 
   const tabs: { id: Tab; icon: string; label: string }[] = [
-    { id:'account',  icon:'person-outline',  label:'Account'  },
-    { id:'security', icon:'shield-outline',  label:'Security' },
+    { id: 'account', icon: 'person-outline', label: 'Account' },
+    { id: 'security', icon: 'shield-outline', label: 'Security' },
   ];
 
   return (
-    <View style={{ flex:1, backgroundColor:Colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       {/* Avatar header */}
       <View style={S.avatarHeader}>
         <View style={S.bgCircle1} />
         <View style={S.bgCircle2} />
         <View style={S.avatarRing}>
-          <LinearGradient colors={[Colors.blue, Colors.orange]} style={S.avatarGrad} start={{ x:0,y:0 }} end={{ x:1,y:1 }}>
+          <LinearGradient colors={[Colors.blue, Colors.orange]} style={S.avatarGrad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
             <Text style={S.avatarTxt}>{initials}</Text>
           </LinearGradient>
         </View>
         <Text style={S.headerName}>{user?.name || '—'}</Text>
-        <View style={{ flexDirection:'row', alignItems:'center', gap:5, marginBottom:12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 12 }}>
           <Ionicons name="mail-outline" size={11} color="rgba(255,255,255,0.5)" />
-          <Text style={{ fontSize:12, color:'rgba(255,255,255,0.55)' }}>{user?.email || '—'}</Text>
+          <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>{user?.email || '—'}</Text>
         </View>
-        <View style={{ flexDirection:'row', gap:8, flexWrap:'wrap', justifyContent:'center' }}>
+        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
           <View style={[S.badge, { backgroundColor: Colors.orange + 'bb' }]}>
             <Ionicons name="briefcase-outline" size={10} color="#fff" />
             <Text style={S.badgeTxt}>{(user?.role || 'user').toUpperCase()}</Text>
           </View>
           {user?.companyName && (
-            <View style={[S.badge, { backgroundColor:'rgba(255,255,255,0.14)' }]}>
+            <View style={[S.badge, { backgroundColor: 'rgba(255,255,255,0.14)' }]}>
               <Ionicons name="business-outline" size={10} color="#fff" />
               <Text style={S.badgeTxt}>{user.companyName}</Text>
             </View>
@@ -262,7 +272,7 @@ export function ProfileScreen() {
             backgroundColor: user?.status === 'active' || user?.status === 'approved'
               ? Colors.green + 'aa' : Colors.amber + 'aa',
           }]}>
-            <View style={{ width:5, height:5, borderRadius:3, backgroundColor:'#fff' }} />
+            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#fff' }} />
             <Text style={S.badgeTxt}>{(user?.status || 'active').toUpperCase()}</Text>
           </View>
         </View>
@@ -282,7 +292,7 @@ export function ProfileScreen() {
         ))}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding:16, paddingBottom:48 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
 
         {/* ═══════════════ ACCOUNT TAB ═══════════════ */}
         {tab === 'account' && (
@@ -291,7 +301,7 @@ export function ProfileScreen() {
 
             {/* My Information card */}
             <View style={[S.card, Shadow.sm]}>
-              <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginBottom:editMode ? 14 : 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: editMode ? 14 : 4 }}>
                 <View style={S.cardIconWrap}>
                   <Ionicons name="person-outline" size={15} color={Colors.blue} />
                 </View>
@@ -301,7 +311,7 @@ export function ProfileScreen() {
                   onPress={() => editMode ? cancelEdit() : setEditMode(true)}
                 >
                   <Ionicons name={editMode ? 'close-outline' : 'pencil-outline'} size={12} color={editMode ? Colors.text2 : Colors.blue} />
-                  <Text style={[S.editPillTxt, editMode && { color:Colors.text2 }]}>
+                  <Text style={[S.editPillTxt, editMode && { color: Colors.text2 }]}>
                     {editMode ? 'Cancel' : 'Edit'}
                   </Text>
                 </TouchableOpacity>
@@ -309,46 +319,13 @@ export function ProfileScreen() {
 
               {editMode ? (
                 <>
-                  <FormField
-                    label="First Name *"
-                    value={firstName}
-                    onChangeText={setFirstName}
-                    placeholder="First name"
-                    icon="person-outline"
-                    autoCapitalize="words"
-                  />
-                  <FormField
-                    label="Last Name"
-                    value={lastName}
-                    onChangeText={setLastName}
-                    placeholder="Last name"
-                    icon="person-outline"
-                    autoCapitalize="words"
-                  />
+                  <FormField label="First Name *" value={firstName} onChangeText={setFirstName} placeholder="First name" icon="person-outline" autoCapitalize="words" />
+                  <FormField label="Last Name" value={lastName} onChangeText={setLastName} placeholder="Last name" icon="person-outline" autoCapitalize="words" />
                   {user?.role !== 'admin' && (
-                    <FormField
-                      label="Phone Number"
-                      value={phone}
-                      onChangeText={setPhone}
-                      placeholder="+218 XX XXX XXXX"
-                      icon="call-outline"
-                      keyboardType="phone-pad"
-                    />
+                    <FormField label="Phone Number" value={phone} onChangeText={setPhone} placeholder="+218 XX XXX XXXX" icon="call-outline" keyboardType="phone-pad" />
                   )}
-                  <FormField
-                    label="Email (cannot be changed)"
-                    value={user?.email || ''}
-                    onChangeText={() => {}}
-                    placeholder=""
-                    icon="mail-outline"
-                    editable={false}
-                  />
-                  <PrimaryButton
-                    label="Save Changes"
-                    onPress={handleSaveProfile}
-                    loading={savingProfile}
-                    icon="checkmark-outline"
-                  />
+                  <FormField label="Email (cannot be changed)" value={user?.email || ''} onChangeText={() => {}} placeholder="" icon="mail-outline" editable={false} />
+                  <PrimaryButton label="Save Changes" onPress={handleSaveProfile} loading={savingProfile} icon="checkmark-outline" />
                 </>
               ) : (
                 <>
@@ -356,7 +333,7 @@ export function ProfileScreen() {
                   <InfoRow icon="mail-outline"      label="Email"   value={user?.email || '—'} />
                   <InfoRow icon="briefcase-outline" label="Role"    value={user?.role || '—'} />
                   {user?.role !== 'admin' && (
-                    <InfoRow icon="call-outline"     label="Phone"   value={user?.phoneNumber || '—'} />
+                    <InfoRow icon="call-outline"    label="Phone"   value={user?.phoneNumber || '—'} />
                   )}
                   {user?.role !== 'admin' && (
                     <InfoRow icon="business-outline" label="Company" value={user?.companyName || '—'} />
@@ -367,23 +344,23 @@ export function ProfileScreen() {
 
             {/* Account Status */}
             {user?.role !== 'admin' && (
-              <View style={[S.card, Shadow.sm, { marginTop:12 }]}>
-                <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginBottom:12 }}>
+              <View style={[S.card, Shadow.sm, { marginTop: 12 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                   <View style={S.cardIconWrap}>
                     <Ionicons name="shield-checkmark-outline" size={15} color={Colors.blue} />
                   </View>
                   <Text style={S.cardTitle}>Account Status</Text>
                 </View>
-                <View style={{ flexDirection:'row', gap:8, flexWrap:'wrap' }}>
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
                   <View style={[S.statusChip, { backgroundColor: user?.isVerified ? Colors.greenBg : Colors.amberBg }]}>
                     <Ionicons name={user?.isVerified ? 'checkmark-circle' : 'time-outline'} size={13} color={user?.isVerified ? Colors.green : Colors.amber} />
                     <Text style={[S.statusChipTxt, { color: user?.isVerified ? Colors.greenText : Colors.amberText }]}>
                       {user?.isVerified ? 'Verified' : 'Pending Verification'}
                     </Text>
                   </View>
-                  <View style={[S.statusChip, { backgroundColor:'rgba(26,92,240,0.08)' }]}>
-                    <View style={{ width:6, height:6, borderRadius:3, backgroundColor:Colors.blue }} />
-                    <Text style={[S.statusChipTxt, { color:Colors.blue, textTransform:'capitalize' }]}>
+                  <View style={[S.statusChip, { backgroundColor: 'rgba(26,92,240,0.08)' }]}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.blue }} />
+                    <Text style={[S.statusChipTxt, { color: Colors.blue, textTransform: 'capitalize' }]}>
                       {user?.status || 'active'}
                     </Text>
                   </View>
@@ -391,46 +368,28 @@ export function ProfileScreen() {
               </View>
             )}
 
-            {/* Logout */}
-            {(
-              <View style={[S.card, Shadow.sm, { marginTop:12 }]}>
-                <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginBottom:12 }}>
-                  <View style={S.cardIconWrap}>
-                    <Ionicons name="help-circle-outline" size={15} color={Colors.blue} />
-                  </View>
-                  <Text style={S.cardTitle}>Support & Legal</Text>
+            {/* Support & Legal */}
+            <View style={[S.card, Shadow.sm, { marginTop: 12 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <View style={S.cardIconWrap}>
+                  <Ionicons name="help-circle-outline" size={15} color={Colors.blue} />
                 </View>
-
-                <SupportRow
-                  icon="help-circle-outline"
-                  label="Help & Support"
-                  desc="Contact: support@weeg.app"
-                  onPress={() => Alert.alert('Help', 'Contact: support@weeg.app')}
-                />
-                <SupportRow
-                  icon="document-text-outline"
-                  label="Terms & Privacy Policy"
-                  onPress={() => Alert.alert('Terms & Privacy Policy', 'This section will be available soon.')}
-                />
-                <SupportRow
-                  icon="information-circle-outline"
-                  label="About WEEG"
-                  desc="Financial Analytics · v1.0.0"
-                  onPress={() => Alert.alert('WEEG', 'Financial Analytics & System Intelligence\nVersion 1.0.0')}
-                  isLast
-                />
+                <Text style={S.cardTitle}>Support & Legal</Text>
               </View>
-            )}
+              <SupportRow icon="help-circle-outline" label="Help & Support" desc="Contact: support@weeg.app" onPress={() => Alert.alert('Help', 'Contact: support@weeg.app')} />
+              <SupportRow icon="document-text-outline" label="Terms & Privacy Policy" onPress={() => Alert.alert('Terms & Privacy Policy', 'This section will be available soon.')} />
+              <SupportRow icon="information-circle-outline" label="About WEEG" desc="Financial Analytics · v1.0.0" onPress={() => Alert.alert('WEEG', 'Financial Analytics & System Intelligence\nVersion 1.0.0')} isLast />
+            </View>
 
             <TouchableOpacity
-              style={[S.logoutBtn, Shadow.sm, { marginTop:12 }]}
+              style={[S.logoutBtn, Shadow.sm, { marginTop: 12 }]}
               onPress={() => Alert.alert('Log Out', 'Are you sure?', [
-                { text:'Cancel' },
-                { text:'Log Out', style:'destructive', onPress: logout },
+                { text: 'Cancel' },
+                { text: 'Log Out', style: 'destructive', onPress: logout },
               ])}
             >
               <Ionicons name="log-out-outline" size={17} color={Colors.red} />
-              <Text style={{ fontSize:14, fontWeight:'700', color:Colors.red }}>Log Out</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: Colors.red }}>Log Out</Text>
             </TouchableOpacity>
           </>
         )}
@@ -440,15 +399,34 @@ export function ProfileScreen() {
           <>
             {pwMsg && <AlertBanner type={pwMsg.type} message={pwMsg.text} />}
 
+            {/* ── NOUVEAU : Biometric Login ──────────────────────────────────── */}
+            <View style={[S.card, Shadow.sm, { marginBottom: 12 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <View style={S.cardIconWrap}>
+                  <Ionicons name="finger-print-outline" size={15} color={Colors.blue} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={S.cardTitle}>Biometric Login</Text>
+                  <Text style={{ fontSize: 11, color: Colors.text3, marginTop: 1 }}>
+                    Fingerprint · Face ID · Iris
+                  </Text>
+                </View>
+              </View>
+
+              {/* BiometricToggle gère son propre état et sa logique interne */}
+              <BiometricToggle email={user?.email || ''} />
+            </View>
+            {/* ── fin Biometric Login ──────────────────────────────────────── */}
+
             {/* Change Password */}
             <View style={[S.card, Shadow.sm]}>
-              <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginBottom:16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
                 <View style={S.cardIconWrap}>
                   <Ionicons name="lock-closed-outline" size={15} color={Colors.blue} />
                 </View>
                 <View>
                   <Text style={S.cardTitle}>Change Password</Text>
-                  <Text style={{ fontSize:11, color:Colors.text3, marginTop:1 }}>All sessions will be closed after change</Text>
+                  <Text style={{ fontSize: 11, color: Colors.text3, marginTop: 1 }}>All sessions will be closed after change</Text>
                 </View>
               </View>
 
@@ -462,7 +440,6 @@ export function ProfileScreen() {
                 showSecure={showOld}
                 onToggleSecure={() => setShowOld(!showOld)}
               />
-
               <FormField
                 label="New Password"
                 value={newPw}
@@ -476,7 +453,7 @@ export function ProfileScreen() {
               />
               {newPw.length >= 8 && <PasswordStrength password={newPw} />}
 
-              <View style={{ marginTop:newPw.length >= 8 ? 14 : 0 }}>
+              <View style={{ marginTop: newPw.length >= 8 ? 14 : 0 }}>
                 <FormField
                   label="Confirm New Password"
                   value={confirmPw}
@@ -490,28 +467,23 @@ export function ProfileScreen() {
                 />
               </View>
 
-              <PrimaryButton
-                label="Update Password"
-                onPress={handleChangePassword}
-                loading={savingPw}
-                icon="lock-closed-outline"
-              />
+              <PrimaryButton label="Update Password" onPress={handleChangePassword} loading={savingPw} icon="lock-closed-outline" />
             </View>
 
             {/* Active Sessions */}
-            <View style={[S.card, Shadow.sm, { marginTop:12 }]}>
-              <View style={{ flexDirection:'row', alignItems:'center', gap:10, marginBottom:12 }}>
+            <View style={[S.card, Shadow.sm, { marginTop: 12 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
                 <View style={S.cardIconWrap}>
                   <Ionicons name="phone-portrait-outline" size={15} color={Colors.blue} />
                 </View>
-                <Text style={[S.cardTitle, { flex:1 }]}>Active Sessions</Text>
-                <TouchableOpacity onPress={loadSessions} style={{ width:30, height:30, borderRadius:BorderRadius.md, backgroundColor:'rgba(26,92,240,0.08)', alignItems:'center', justifyContent:'center' }}>
+                <Text style={[S.cardTitle, { flex: 1 }]}>Active Sessions</Text>
+                <TouchableOpacity onPress={loadSessions} style={{ width: 30, height: 30, borderRadius: BorderRadius.md, backgroundColor: 'rgba(26,92,240,0.08)', alignItems: 'center', justifyContent: 'center' }}>
                   <Ionicons name="refresh-outline" size={14} color={Colors.blue} />
                 </TouchableOpacity>
               </View>
 
               {loadingSessions ? (
-                <ActivityIndicator color={Colors.blue} style={{ marginVertical:16 }} />
+                <ActivityIndicator color={Colors.blue} style={{ marginVertical: 16 }} />
               ) : sessions.length === 0 ? (
                 <EmptyState icon="phone-portrait-outline" title="No active sessions" />
               ) : (
@@ -521,9 +493,9 @@ export function ProfileScreen() {
               )}
 
               {sessions.length > 0 && (
-                <TouchableOpacity onPress={handleLogoutAll} style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', gap:6, marginTop:14, paddingTop:12, borderTopWidth:1, borderTopColor:Colors.border }}>
+                <TouchableOpacity onPress={handleLogoutAll} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border }}>
                   <Ionicons name="log-out-outline" size={14} color={Colors.red} />
-                  <Text style={{ fontSize:12, fontWeight:'700', color:Colors.red }}>Log out all devices</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.red }}>Log out all devices</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -534,57 +506,49 @@ export function ProfileScreen() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles (identiques à l'original) ────────────────────────────────────────
 const S = StyleSheet.create({
-  avatarHeader: {
-    backgroundColor:Colors.navy2,
-    paddingHorizontal:24, paddingTop:40, paddingBottom:24,
-    alignItems:'center', overflow:'hidden', position:'relative',
-  },
-  bgCircle1:   { position:'absolute', width:200, height:200, borderRadius:100, borderWidth:1, borderColor:'rgba(26,92,240,0.12)', top:-60, right:-60 },
-  bgCircle2:   { position:'absolute', width:120, height:120, borderRadius:60,  borderWidth:1, borderColor:'rgba(240,112,32,0.1)',  bottom:-20, left:-20 },
-  avatarRing:  { width:84, height:84, borderRadius:26, borderWidth:2.5, borderColor:Colors.orange, padding:3, marginBottom:12 },
-  avatarGrad:  { flex:1, borderRadius:22, alignItems:'center', justifyContent:'center' },
-  avatarTxt:   { fontSize:26, fontWeight:'900', color:'#fff', letterSpacing:1 },
-  headerName:  { fontSize:20, fontWeight:'700', color:'#fff', letterSpacing:-0.3, marginBottom:4 },
-  badge:       { flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:10, paddingVertical:4, borderRadius:BorderRadius.full },
-  badgeTxt:    { fontSize:10, fontWeight:'800', color:'#fff', letterSpacing:0.5 },
+  avatarHeader: { backgroundColor: Colors.navy2, paddingHorizontal: 24, paddingTop: 40, paddingBottom: 24, alignItems: 'center', overflow: 'hidden', position: 'relative' },
+  bgCircle1:    { position: 'absolute', width: 200, height: 200, borderRadius: 100, borderWidth: 1, borderColor: 'rgba(26,92,240,0.12)', top: -60, right: -60 },
+  bgCircle2:    { position: 'absolute', width: 120, height: 120, borderRadius: 60, borderWidth: 1, borderColor: 'rgba(240,112,32,0.1)', bottom: -20, left: -20 },
+  avatarRing:   { width: 84, height: 84, borderRadius: 26, borderWidth: 2.5, borderColor: Colors.orange, padding: 3, marginBottom: 12 },
+  avatarGrad:   { flex: 1, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  avatarTxt:    { fontSize: 26, fontWeight: '900', color: '#fff', letterSpacing: 1 },
+  headerName:   { fontSize: 20, fontWeight: '700', color: '#fff', letterSpacing: -0.3, marginBottom: 4 },
+  badge:        { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: BorderRadius.full },
+  badgeTxt:     { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
 
-  tabBar:      { flexDirection:'row', backgroundColor:Colors.surface, borderBottomWidth:1, borderBottomColor:Colors.border },
-  tabItem:     { flex:1, flexDirection:'row', alignItems:'center', justifyContent:'center', gap:5, paddingVertical:12, borderBottomWidth:2, borderBottomColor:'transparent' },
-  tabItemActive:{ borderBottomColor:Colors.blue },
-  tabLabel:    { fontSize:12, fontWeight:'500', color:Colors.text3 },
-  tabLabelActive:{ color:Colors.blue, fontWeight:'700' },
+  tabBar:       { flexDirection: 'row', backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  tabItem:      { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabItemActive:{ borderBottomColor: Colors.blue },
+  tabLabel:     { fontSize: 12, fontWeight: '500', color: Colors.text3 },
+  tabLabelActive:{ color: Colors.blue, fontWeight: '700' },
 
-  card:        { backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, padding:16, borderWidth:1, borderColor:Colors.border },
-  cardIconWrap:{ width:30, height:30, borderRadius:BorderRadius.md, backgroundColor:'rgba(26,92,240,0.08)', alignItems:'center', justifyContent:'center' },
-  cardTitle:   { flex:1, fontSize:14, fontWeight:'700', color:Colors.text },
+  card:         { backgroundColor: Colors.surface, borderRadius: BorderRadius.xl, padding: 16, borderWidth: 1, borderColor: Colors.border },
+  cardIconWrap: { width: 30, height: 30, borderRadius: BorderRadius.md, backgroundColor: 'rgba(26,92,240,0.08)', alignItems: 'center', justifyContent: 'center' },
+  cardTitle:    { flex: 1, fontSize: 14, fontWeight: '700', color: Colors.text },
 
-  editPill:       { flexDirection:'row', alignItems:'center', gap:4, paddingHorizontal:10, paddingVertical:5, borderRadius:BorderRadius.md, backgroundColor:'rgba(26,92,240,0.08)', borderWidth:1, borderColor:'rgba(26,92,240,0.2)' },
-  editPillCancel: { backgroundColor:Colors.surface2, borderColor:Colors.border },
-  editPillTxt:    { fontSize:12, fontWeight:'600', color:Colors.blue },
+  editPill:       { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: BorderRadius.md, backgroundColor: 'rgba(26,92,240,0.08)', borderWidth: 1, borderColor: 'rgba(26,92,240,0.2)' },
+  editPillCancel: { backgroundColor: Colors.surface2, borderColor: Colors.border },
+  editPillTxt:    { fontSize: 12, fontWeight: '600', color: Colors.blue },
 
-  infoRow:     { flexDirection:'row', alignItems:'center', gap:10, paddingVertical:10, borderBottomWidth:1, borderBottomColor:Colors.bg },
-  infoIconWrap:{ width:26, height:26, borderRadius:BorderRadius.md, backgroundColor:'rgba(26,92,240,0.08)', alignItems:'center', justifyContent:'center' },
-  infoLabel:   { fontSize:12, color:Colors.text3, width:64 },
-  infoValue:   { flex:1, fontSize:13, fontWeight:'500', color:Colors.text, textAlign:'right' },
+  infoRow:      { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Colors.bg },
+  infoIconWrap: { width: 26, height: 26, borderRadius: BorderRadius.md, backgroundColor: 'rgba(26,92,240,0.08)', alignItems: 'center', justifyContent: 'center' },
+  infoLabel:    { fontSize: 12, color: Colors.text3, width: 64 },
+  infoValue:    { flex: 1, fontSize: 13, fontWeight: '500', color: Colors.text, textAlign: 'right' },
 
-  supportRow:        { flexDirection:'row', alignItems:'center', gap:12, paddingVertical:11 },
-  supportRowBorder:  { borderBottomWidth:1, borderBottomColor:Colors.bg },
-  supportIconWrap:   { width:34, height:34, borderRadius:BorderRadius.lg, backgroundColor:Colors.surface2, alignItems:'center', justifyContent:'center', flexShrink:0 },
-  supportLabel:      { fontSize:13, fontWeight:'600', color:Colors.text },
-  supportDesc:       { fontSize:11, color:Colors.text3, marginTop:2 },
+  supportRow:       { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
+  supportRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.bg },
+  supportIconWrap:  { width: 34, height: 34, borderRadius: BorderRadius.lg, backgroundColor: Colors.surface2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  supportLabel:     { fontSize: 13, fontWeight: '600', color: Colors.text },
+  supportDesc:      { fontSize: 11, color: Colors.text3, marginTop: 2 },
 
-  statusChip:    { flexDirection:'row', alignItems:'center', gap:6, paddingHorizontal:12, paddingVertical:7, borderRadius:BorderRadius.full },
-  statusChipTxt: { fontSize:12, fontWeight:'700' },
+  statusChip:    { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: BorderRadius.full },
+  statusChipTxt: { fontSize: 12, fontWeight: '700' },
 
-  logoutBtn: {
-    flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8,
-    backgroundColor:Colors.surface, borderRadius:BorderRadius.xl, paddingVertical:14,
-    borderWidth:1.5, borderColor:'#fecaca',
-  },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Colors.surface, borderRadius: BorderRadius.xl, paddingVertical: 14, borderWidth: 1.5, borderColor: '#fecaca' },
 
-  sessionRow:    { flexDirection:'row', alignItems:'center', gap:12, paddingVertical:11, borderBottomWidth:1, borderBottomColor:Colors.bg },
-  sessionIcon:   { width:36, height:36, borderRadius:BorderRadius.lg, backgroundColor:Colors.surface2, alignItems:'center', justifyContent:'center', flexShrink:0 },
-  currentBadge:  { flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:9, paddingVertical:5, borderRadius:BorderRadius.md, backgroundColor:Colors.greenBg },
+  sessionRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: Colors.bg },
+  sessionIcon:  { width: 36, height: 36, borderRadius: BorderRadius.lg, backgroundColor: Colors.surface2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  currentBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 5, borderRadius: BorderRadius.md, backgroundColor: Colors.greenBg },
 });

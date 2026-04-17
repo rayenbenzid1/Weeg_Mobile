@@ -1,33 +1,47 @@
-import React, { useState } from 'react';
+/**
+ * src/core/screens/auth/LoginScreen.tsx — WEEG v2 with Biometric Auth
+ *
+ * SECURITY FIX — Email-first biometric flow:
+ *   - Biometric button is hidden until the user types an email
+ *   - Once an email is entered, we check if biometrics are enabled FOR THAT
+ *     specific account; only then is the button shown
+ *   - `BiometricService.authenticate(email)` explicitly passes the email so
+ *     only credentials for that account are returned
+ *   - Auto-trigger on mount is removed — the user must type their email first
+ *   - Multi-account support: each email has independent biometric state
+ */
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
-  Image, Modal,
+  Image, Modal, Animated, Easing,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
 import { AuthService } from '../../lib/api';
+import { BiometricService, BiometricCapability } from '../../lib/biometricService';
 import { Colors, Spacing, BorderRadius, Shadow } from '../../constants/theme';
 
-const WEEG_BLUE = '#1a6fe8';
+const WEEG_BLUE   = '#1a6fe8';
 const WEEG_ORANGE = '#e87c1a';
 
-// ─── Modal Mot de passe oublié ─────────────────────────────────────────────────
+// ─── Forgot Password Modal (unchanged) ───────────────────────────────────────
 
 type ForgotStep = 'email' | 'code' | 'reset' | 'done';
 
 function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<ForgotStep>('email');
-  const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [resetToken, setResetToken] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  const [step, setStep]                       = useState<ForgotStep>('email');
+  const [email, setEmail]                     = useState('');
+  const [code, setCode]                       = useState('');
+  const [resetToken, setResetToken]           = useState('');
+  const [newPassword, setNewPassword]         = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [showPw, setShowPw] = useState(false);
+  const [loading, setLoading]                 = useState(false);
+  const [error, setError]                     = useState('');
+  const [showPw, setShowPw]                   = useState(false);
 
   const handleRequestCode = async () => {
     if (!email.trim()) { setError('Please enter your email.'); return; }
@@ -69,10 +83,13 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
             <Ionicons name="close" size={22} color={Colors.gray500} />
           </TouchableOpacity>
         </View>
-
         <ScrollView contentContainerStyle={{ padding: 24, alignItems: 'center' }} keyboardShouldPersistTaps="handled">
           <LinearGradient colors={[WEEG_BLUE, WEEG_ORANGE]} style={fw.iconCircle} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-            <Ionicons name={step === 'email' ? 'mail-outline' : step === 'code' ? 'keypad-outline' : step === 'reset' ? 'lock-open-outline' : 'checkmark-circle-outline'} size={32} color="white" />
+            <Ionicons
+              name={step === 'email' ? 'mail-outline' : step === 'code' ? 'keypad-outline' : step === 'reset' ? 'lock-open-outline' : 'checkmark-circle-outline'}
+              size={32}
+              color="white"
+            />
           </LinearGradient>
 
           <Text style={fw.title}>
@@ -85,7 +102,6 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
              'You can now log in with your new password'}
           </Text>
 
-          {/* Stepper */}
           {step !== 'done' && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 24 }}>
               {['email', 'code', 'reset'].map((s, i) => {
@@ -111,7 +127,6 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
           ) : null}
 
           <View style={{ width: '100%' }}>
-            {/* Étape 1 : Email */}
             {step === 'email' && (
               <>
                 <Text style={fw.label}>Email Address</Text>
@@ -127,7 +142,6 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               </>
             )}
 
-            {/* Étape 2 : Code */}
             {step === 'code' && (
               <>
                 <Text style={fw.label}>6-Digit Code</Text>
@@ -143,7 +157,6 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               </>
             )}
 
-            {/* Étape 3 : Nouveau mdp */}
             {step === 'reset' && (
               <>
                 <Text style={fw.label}>New Password</Text>
@@ -167,7 +180,6 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
               </>
             )}
 
-            {/* Étape 4 : Succès */}
             {step === 'done' && (
               <>
                 <View style={{ alignItems: 'center', paddingVertical: 20 }}>
@@ -190,17 +202,156 @@ function ForgotPasswordModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Screen Principal ──────────────────────────────────────────────────────────
+// ─── Biometric Button ─────────────────────────────────────────────────────────
+
+function BiometricButton({
+  capability,
+  onPress,
+  loading,
+}: {
+  capability: BiometricCapability;
+  onPress: () => void;
+  loading: boolean;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim  = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(glowAnim, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  const handlePressIn  = () => Animated.spring(scaleAnim, { toValue: 0.94, useNativeDriver: true }).start();
+  const handlePressOut = () => Animated.spring(scaleAnim, { toValue: 1, friction: 3, tension: 140, useNativeDriver: true }).start();
+
+  const iconName = capability.biometricType === 'Face ID'
+    ? 'scan-outline'
+    : capability.biometricType === 'Iris'
+    ? 'eye-outline'
+    : 'finger-print-outline';
+
+  const borderColor = glowAnim.interpolate({
+    inputRange:  [0, 1],
+    outputRange: ['rgba(26,111,232,0.25)', 'rgba(232,124,26,0.55)'],
+  });
+
+  return (
+    <Animated.View style={[{ transform: [{ scale: scaleAnim }] }]}>
+      <Animated.View style={[s.biometricWrapper, { borderColor }]}>
+        <TouchableOpacity
+          style={s.biometricBtn}
+          onPress={onPress}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          disabled={loading}
+          activeOpacity={1}
+        >
+          {loading ? (
+            <ActivityIndicator color={WEEG_BLUE} size="small" />
+          ) : (
+            <>
+              <LinearGradient
+                colors={[WEEG_BLUE, WEEG_ORANGE]}
+                style={s.biometricIconWrap}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name={iconName as any} size={22} color="#fff" />
+              </LinearGradient>
+              <Text style={s.biometricLabel}>
+                Sign in with {capability.biometricType}
+              </Text>
+              <Ionicons name="chevron-forward" size={14} color={Colors.gray400} />
+            </>
+          )}
+        </TouchableOpacity>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+// ─── Divider ──────────────────────────────────────────────────────────────────
+
+function OrDivider() {
+  return (
+    <View style={s.dividerRow}>
+      <View style={s.dividerLine} />
+      <Text style={s.dividerTxt}>or</Text>
+      <View style={s.dividerLine} />
+    </View>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export function LoginScreen({ navigation }: any) {
   const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [showForgot, setShowForgot] = useState(false);
 
+  const [email, setEmail]               = useState('');
+  const [password, setPassword]         = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading]           = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  const [error, setError]               = useState('');
+  const [showForgot, setShowForgot]     = useState(false);
+
+  /**
+   * Hardware capability (type, isSupported, isEnrolled).
+   * isEnabled is always computed per-email — see emailBiometricEnabled.
+   */
+  const [hardwareCapability, setHardwareCapability] = useState<BiometricCapability | null>(null);
+
+  /**
+   * Whether the CURRENTLY TYPED email has biometric login enabled.
+   * This drives whether the biometric button is shown.
+   */
+  const [emailBiometricEnabled, setEmailBiometricEnabled] = useState(false);
+
+  // Debounce ref for email checking
+  const emailCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Load hardware capability once on mount ────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      // Pass null → only hardware check, no per-email lookup
+      const cap = await BiometricService.getCapability(null);
+      setHardwareCapability(cap);
+    })();
+  }, []);
+
+  // ── Check biometric status whenever email changes ─────────────────────────
+  const checkEmailBiometric = useCallback(async (emailValue: string) => {
+    const trimmed = emailValue.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes('@')) {
+      setEmailBiometricEnabled(false);
+      return;
+    }
+    if (!hardwareCapability?.isSupported || !hardwareCapability?.isEnrolled) {
+      setEmailBiometricEnabled(false);
+      return;
+    }
+    const enabled = await BiometricService.isEnabledForEmail(trimmed);
+    setEmailBiometricEnabled(enabled);
+  }, [hardwareCapability]);
+
+  useEffect(() => {
+    // Debounce so we don't hit storage on every keystroke
+    if (emailCheckTimer.current) clearTimeout(emailCheckTimer.current);
+    emailCheckTimer.current = setTimeout(() => {
+      checkEmailBiometric(email);
+    }, 300);
+    return () => {
+      if (emailCheckTimer.current) clearTimeout(emailCheckTimer.current);
+    };
+  }, [email, checkEmailBiometric]);
+
+  // ── Password login ────────────────────────────────────────────────────────
   const handleLogin = async () => {
     setError('');
     if (!email.trim() || !password) {
@@ -210,14 +361,79 @@ export function LoginScreen({ navigation }: any) {
     setLoading(true);
     try {
       const result = await login(email.trim().toLowerCase(), password);
-      if (!result.success) setError(result.message);
-      // Succès → AppNavigator redirige automatiquement via AuthContext
+      if (!result.success) {
+        setError(result.message);
+        setLoading(false);
+        return;
+      }
+
+      // LOGIN SUCCEEDED
+      // Write a "pending setup" flag so BiometricSetupGate (authenticated side)
+      // can offer to enable biometrics AFTER navigation.
+      const cap = await BiometricService.getCapability(email.trim().toLowerCase());
+      if (cap.isSupported && cap.isEnrolled && !cap.isEnabled) {
+        await BiometricService.setPendingSetup(
+          email.trim().toLowerCase(),
+          password,
+        );
+      }
+      // AuthContext navigation happens automatically — nothing else needed here.
     } catch {
       setError('An unexpected error occurred.');
-    } finally {
       setLoading(false);
     }
   };
+
+  // ── Biometric login ───────────────────────────────────────────────────────
+  const handleBiometricLogin = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!emailBiometricEnabled || !trimmedEmail) return;
+
+    setBiometricLoading(true);
+    setError('');
+    try {
+      // Authenticate strictly for this email — never returns another user's credentials
+      const result = await BiometricService.authenticate(
+        trimmedEmail,
+        `Sign in as ${trimmedEmail}`,
+      );
+
+      if (!result.success) {
+        if (result.errorCode !== 'user_cancel') {
+          setError(result.error || 'Biometric authentication failed.');
+        }
+        setBiometricLoading(false);
+        return;
+      }
+
+      // Use the credentials that were returned for this specific email
+      const loginResult = await login(result.email!, result.password!);
+      if (!loginResult.success) {
+        // Credentials changed on server — disable biometric and ask for password
+        await BiometricService.disable(trimmedEmail);
+        setEmailBiometricEnabled(false);
+        setError('Your credentials have changed. Please sign in with your password.');
+      }
+    } catch {
+      setError('Biometric authentication failed.');
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
+  // The biometric button is shown only when:
+  //   1. The typed email has biometrics enabled
+  //   2. Not currently doing a password login
+  const showBiometricButton =
+    emailBiometricEnabled &&
+    !loading &&
+    hardwareCapability !== null;
+
+  // Build a display capability for the button (merging hardware + per-email flag)
+  const displayCapability: BiometricCapability | null = hardwareCapability
+    ? { ...hardwareCapability, isEnabled: emailBiometricEnabled }
+    : null;
 
   return (
     <SafeAreaView style={s.container}>
@@ -237,7 +453,7 @@ export function LoginScreen({ navigation }: any) {
             <Text style={s.cardTitle}>Welcome Back</Text>
             <Text style={s.cardSub}>Sign in to your WEEG account</Text>
 
-            {/* Erreur backend */}
+            {/* Error banner */}
             {error ? (
               <View style={s.errorBanner}>
                 <Ionicons name="alert-circle-outline" size={16} color="#dc2626" />
@@ -245,7 +461,7 @@ export function LoginScreen({ navigation }: any) {
               </View>
             ) : null}
 
-            {/* Email */}
+            {/* Email — always first */}
             <View style={s.field}>
               <Text style={s.label}>Email Address</Text>
               <View style={[s.inputRow, !!error && s.inputErr]}>
@@ -258,10 +474,22 @@ export function LoginScreen({ navigation }: any) {
                   onChangeText={t => { setEmail(t); setError(''); }}
                   keyboardType="email-address"
                   autoCapitalize="none"
-                  editable={!loading}
+                  editable={!loading && !biometricLoading}
                 />
               </View>
             </View>
+
+            {/* ── Biometric quick-login — only shown AFTER a recognised email ── */}
+            {showBiometricButton && displayCapability && (
+              <>
+                <BiometricButton
+                  capability={displayCapability}
+                  onPress={handleBiometricLogin}
+                  loading={biometricLoading}
+                />
+                <OrDivider />
+              </>
+            )}
 
             {/* Password */}
             <View style={s.field}>
@@ -280,7 +508,7 @@ export function LoginScreen({ navigation }: any) {
                   value={password}
                   onChangeText={t => { setPassword(t); setError(''); }}
                   secureTextEntry={!showPassword}
-                  editable={!loading}
+                  editable={!loading && !biometricLoading}
                 />
                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 14 }}>
                   <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.gray400} />
@@ -288,10 +516,10 @@ export function LoginScreen({ navigation }: any) {
               </View>
             </View>
 
-            {/* Bouton connexion */}
-            <TouchableOpacity onPress={handleLogin} disabled={loading} style={{ marginTop: 8 }}>
+            {/* Sign in button */}
+            <TouchableOpacity onPress={handleLogin} disabled={loading || biometricLoading} style={{ marginTop: 8 }}>
               <LinearGradient
-                colors={loading ? [Colors.gray300, Colors.gray400] : [WEEG_BLUE, WEEG_ORANGE]}
+                colors={(loading || biometricLoading) ? [Colors.gray300, Colors.gray400] : [WEEG_BLUE, WEEG_ORANGE]}
                 style={s.submitBtn}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               >
@@ -302,7 +530,7 @@ export function LoginScreen({ navigation }: any) {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Lien inscription */}
+            {/* Sign up link */}
             <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20 }}>
               <Text style={{ fontSize: 14, color: Colors.gray500 }}>Don't have an account? </Text>
               <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
@@ -311,7 +539,7 @@ export function LoginScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Info bas de page */}
+          {/* Info */}
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 20, paddingHorizontal: 4 }}>
             <Ionicons name="information-circle-outline" size={16} color={Colors.gray400} />
             <Text style={{ flex: 1, fontSize: 12, color: Colors.gray400, lineHeight: 18 }}>
@@ -329,37 +557,89 @@ export function LoginScreen({ navigation }: any) {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#eff6ff' },
-  scroll: { flexGrow: 1, paddingHorizontal: Spacing.base, paddingVertical: 32, justifyContent: 'center' },
+  scroll:    { flexGrow: 1, paddingHorizontal: Spacing.base, paddingVertical: 32, justifyContent: 'center' },
+
   logoArea: { alignItems: 'center', marginBottom: 32 },
-  logoImg: { width: 220, height: 80, marginBottom: 8 },
-  logoSub: { fontSize: 13, color: Colors.gray500, textAlign: 'center' },
-  card: { backgroundColor: Colors.white, borderRadius: BorderRadius['2xl'], padding: 24, borderWidth: 1, borderColor: Colors.gray100 },
+  logoImg:  { width: 220, height: 80, marginBottom: 8 },
+  logoSub:  { fontSize: 13, color: Colors.gray500, textAlign: 'center' },
+
+  card:      { backgroundColor: Colors.white, borderRadius: BorderRadius['2xl'], padding: 24, borderWidth: 1, borderColor: Colors.gray100 },
   cardTitle: { fontSize: 22, fontWeight: '800', color: Colors.foreground, marginBottom: 4 },
-  cardSub: { fontSize: 13, color: Colors.gray500, marginBottom: 24 },
-  errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#fef2f2', borderRadius: BorderRadius.lg, padding: 12, borderWidth: 1, borderColor: '#fecaca', marginBottom: 16 },
+  cardSub:   { fontSize: 13, color: Colors.gray500, marginBottom: 24 },
+
+  errorBanner:    { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#fef2f2', borderRadius: BorderRadius.lg, padding: 12, borderWidth: 1, borderColor: '#fecaca', marginBottom: 16 },
   errorBannerTxt: { flex: 1, fontSize: 13, color: '#dc2626', lineHeight: 18 },
-  field: { marginBottom: 18 },
-  label: { fontSize: 14, fontWeight: '600', color: Colors.foreground, marginBottom: 8 },
+
+  field:    { marginBottom: 18 },
+  label:    { fontSize: 14, fontWeight: '600', color: Colors.foreground, marginBottom: 8 },
   inputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.gray50, borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.gray200 },
   inputErr: { borderColor: '#fca5a5' },
-  input: { flex: 1, paddingVertical: 13, paddingHorizontal: 10, fontSize: 15, color: Colors.foreground },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15, borderRadius: BorderRadius.lg },
+  input:    { flex: 1, paddingVertical: 13, paddingHorizontal: 10, fontSize: 15, color: Colors.foreground },
+
+  submitBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15, borderRadius: BorderRadius.lg },
   submitBtnTxt: { fontSize: 16, fontWeight: '700', color: Colors.white },
+
+  biometricWrapper: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  biometricBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    backgroundColor: '#f8faff',
+  },
+  biometricIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: BorderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  biometricLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.foreground,
+  },
+
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: Colors.gray200,
+  },
+  dividerTxt: {
+    fontSize: 12,
+    color: Colors.gray400,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
 });
 
 const fw = StyleSheet.create({
   iconCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 16, marginTop: 8 },
-  title: { fontSize: 22, fontWeight: '800', color: Colors.foreground, textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 13, color: Colors.gray500, textAlign: 'center', marginBottom: 20, lineHeight: 20 },
-  dot: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.gray200, alignItems: 'center', justifyContent: 'center' },
-  dotNum: { fontSize: 12, fontWeight: '700', color: Colors.gray500 },
-  line: { width: 40, height: 2, backgroundColor: Colors.gray200, marginHorizontal: 4 },
-  errBox: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#fef2f2', borderRadius: BorderRadius.lg, padding: 12, borderWidth: 1, borderColor: '#fecaca', width: '100%', marginBottom: 16 },
-  errTxt: { flex: 1, fontSize: 13, color: '#dc2626' },
-  label: { fontSize: 14, fontWeight: '600', color: Colors.foreground, marginBottom: 8 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.gray50, borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.gray200, paddingHorizontal: 14, paddingVertical: 12 },
-  input: { flex: 1, fontSize: 15, color: Colors.foreground },
-  codeInput: { fontSize: 36, fontWeight: '800', letterSpacing: 12, textAlign: 'center', backgroundColor: Colors.gray50, borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.gray200, paddingVertical: 16, paddingHorizontal: 20, color: WEEG_BLUE },
-  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, borderRadius: BorderRadius.lg },
-  btnTxt: { fontSize: 16, fontWeight: '700', color: Colors.white },
+  title:      { fontSize: 22, fontWeight: '800', color: Colors.foreground, textAlign: 'center', marginBottom: 8 },
+  subtitle:   { fontSize: 13, color: Colors.gray500, textAlign: 'center', marginBottom: 20, lineHeight: 20 },
+  dot:        { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.gray200, alignItems: 'center', justifyContent: 'center' },
+  dotNum:     { fontSize: 12, fontWeight: '700', color: Colors.gray500 },
+  line:       { width: 40, height: 2, backgroundColor: Colors.gray200, marginHorizontal: 4 },
+  errBox:     { flexDirection: 'row', gap: 8, alignItems: 'flex-start', backgroundColor: '#fef2f2', borderRadius: BorderRadius.lg, padding: 12, borderWidth: 1, borderColor: '#fecaca', width: '100%', marginBottom: 16 },
+  errTxt:     { flex: 1, fontSize: 13, color: '#dc2626' },
+  label:      { fontSize: 14, fontWeight: '600', color: Colors.foreground, marginBottom: 8 },
+  inputRow:   { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.gray50, borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.gray200, paddingHorizontal: 14, paddingVertical: 12 },
+  input:      { flex: 1, fontSize: 15, color: Colors.foreground },
+  codeInput:  { fontSize: 36, fontWeight: '800', letterSpacing: 12, textAlign: 'center', backgroundColor: Colors.gray50, borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.gray200, paddingVertical: 16, paddingHorizontal: 20, color: WEEG_BLUE },
+  btn:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, borderRadius: BorderRadius.lg },
+  btnTxt:     { fontSize: 16, fontWeight: '700', color: Colors.white },
 });
