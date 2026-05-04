@@ -18,7 +18,11 @@
       "adaptiveIcon": {
         "backgroundColor": "#1a6fe8"
       },
-      "package": "com.weeg.mobile"
+      "package": "com.weeg.mobile",
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -28,6 +32,11 @@
       "expo-secure-store",
       "expo-local-authentication",
       "expo-video"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "599d4bc2-656c-4d11-9122-e7dc208e05b0"
+      }
+    }
   }
 }
