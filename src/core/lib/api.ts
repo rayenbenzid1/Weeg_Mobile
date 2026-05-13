@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // ─── Configuration ───────────────────────────────────────────────────────────
 
 
-export const BASE_URL = 'https://fasi-backend.onrender.com'; // Appareil physique (remplacez l'IP)
+export const BASE_URL = 'https://fasi-backend.onrender.com'; 
 
 const API_URL = `${BASE_URL}/api`;
 

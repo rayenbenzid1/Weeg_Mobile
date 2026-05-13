@@ -6,10 +6,10 @@
     "scheme": "weeg",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "icon": "./src/core/assets/logo.jpeg",
+    "icon": "./src/core/assets/app-icon.png",
 
     "splash": {
-      "image": "./src/core/assets/logo.jpeg",
+      "image": "./src/core/assets/app-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#1a6fe8"
     },
@@ -19,7 +19,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./src/core/assets/logo.jpeg",
+        "foregroundImage": "./src/core/assets/app-icon.png",
         "backgroundColor": "#1a6fe8"
       },
       "package": "com.weeg.mobile",
